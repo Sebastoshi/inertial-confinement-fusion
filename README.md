@@ -75,6 +75,19 @@ capsule together. The 2D sim's measured growth rate matches `√(A g k)` to ~7%.
 
 ![RT 2D](Rayleigh-Taylor/rt_2d.png)
 
+### [`ML Surrogate/`](ML%20Surrogate) — the data-driven layer
+
+Sample the rocket model across its design space, train a neural-network
+**surrogate**, and get the ignition boundary, sensitivity, and inverse design
+almost for free — the miniature version of LLNL's "cognitive simulation"
+pipeline. The surrogate hits R² ≈ 0.99 on all outputs and classifies ignition at
+~97%. The highlight is honest: the inverse-design optimizer first proposes an
+over-optimistic design that the real simulator says **fizzles**, so the code does
+what real ICF-ML does — verify, resample, retrain (**active learning**) — until
+it lands a design **verified** to ignite.
+
+![ML surrogate](ML%20Surrogate/ml_ignition.png)
+
 ## Running
 
 ```bash
@@ -82,8 +95,10 @@ pip install -r requirements.txt
 python3 "0-D Hotspot/hotspot_0d.py"
 python3 "Rocket Implosion/rocket_implosion.py"
 python3 "1-D Lagrangian Hydro/lagrangian_1d.py"
+python3 "1-D Lagrangian Hydro/hydro_validation.py"   # verify the solver vs exact solutions
 python3 "Rayleigh-Taylor/rt_mechanics.py"
 python3 "Rayleigh-Taylor/rt_2d.py"
+python3 "ML Surrogate/ml_ignition.py"                # needs scikit-learn
 ```
 
 Each script prints its headline numbers and saves its figure alongside itself.
@@ -102,7 +117,10 @@ These are toy models. The largest omissions, roughly in order of impact:
 ## Roadmap
 
 - [x] 1-D Lagrangian hydro (watch the shock converge and form the hot spot)
+- [x] verify the solver against exact solutions (Sod / Noh / Sedov)
 - [x] Rayleigh–Taylor growth on the imploding shell (mechanics + 2D sim)
+- [x] ML surrogate + ignition boundary + inverse design (active learning)
+- [ ] multi-fidelity ML: transfer-learn from these toys onto MULTI runs
 - [ ] couple the implosion output into a time-dependent burn
 
 ---

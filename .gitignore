@@ -14,3 +14,6 @@ env/
 
 # Stray fetch artifacts
 *.pdf
+
+# Generated ML datasets (regenerate from the scripts)
+*.npz
