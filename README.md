@@ -61,6 +61,20 @@ the models above actually buys you.
 
 ![1-D implosion](1-D%20Lagrangian%20Hydro/lagrangian_implosion.png)
 
+### [`Rayleigh-Taylor/`](Rayleigh-Taylor) — why it's actually hard
+
+The instability the 1-D models can't show. The imploding shell is
+**Rayleigh–Taylor unstable**: ripples grow exponentially and can shred it before
+stagnation. Two scripts — the **mechanics** (dispersion relation, ablative
+stabilization, e-foldings over the implosion) and a **2D simulation** that grows
+a real bubble-and-spike mushroom and measures its growth rate.
+
+The headline: a 5 nm ripple grows ×72 under *ablative* RT (shell survives) but
+would grow ×13000 classically (shell breaks up) — ablation is what holds the
+capsule together. The 2D sim's measured growth rate matches `√(A g k)` to ~7%.
+
+![RT 2D](Rayleigh-Taylor/rt_2d.png)
+
 ## Running
 
 ```bash
@@ -68,6 +82,8 @@ pip install -r requirements.txt
 python3 "0-D Hotspot/hotspot_0d.py"
 python3 "Rocket Implosion/rocket_implosion.py"
 python3 "1-D Lagrangian Hydro/lagrangian_1d.py"
+python3 "Rayleigh-Taylor/rt_mechanics.py"
+python3 "Rayleigh-Taylor/rt_2d.py"
 ```
 
 Each script prints its headline numbers and saves its figure alongside itself.
@@ -77,18 +93,16 @@ the physics that was deliberately left out.
 ## What's deliberately missing
 
 These are toy models. The largest omissions, roughly in order of impact:
-- **Rayleigh–Taylor instability** — the ablation front is unstable; RT growth is
-  the single effect that most limits real implosions. (Next on the roadmap; the
-  1-D model can't show it by construction.)
 - radiation transport beyond optically-thin bremsstrahlung
 - separate ion and electron temperatures; electron heat conduction
 - real (Fermi-degenerate) EOS for the cold dense shell
 - pulse shaping, cross-beam effects, laser–plasma instabilities
+- fully coupled multi-dimensional radiation-hydro (the RT models are stand-alone)
 
 ## Roadmap
 
 - [x] 1-D Lagrangian hydro (watch the shock converge and form the hot spot)
-- [ ] Rayleigh–Taylor growth on the imploding shell
+- [x] Rayleigh–Taylor growth on the imploding shell (mechanics + 2D sim)
 - [ ] couple the implosion output into a time-dependent burn
 
 ---
