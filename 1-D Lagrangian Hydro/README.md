@@ -48,8 +48,26 @@ converging-shock singularity — a numerical artifact of a point focus, which is
 why the physical measure is the mass-averaged hot-spot temperature.
 
 **Validation.** Energy conservation to ≈1% (the artificial-viscosity leak) is
-the honest error bar. Bump `N_FILL` to sharpen the converging shock; the focus
-temperature climbs because the singularity is less rounded-off.
+one error bar. The stronger check is `hydro_validation.py`, which runs the *same
+scheme* against three problems with exact solutions:
+
+```bash
+python3 hydro_validation.py
+```
+
+![hydro verification](hydro_validation.png)
+
+| test | geometry | result |
+|---|---|---|
+| **Sod shock tube** | planar | L1 density error **0.0015** vs exact Riemann solution |
+| **Noh problem** | spherical | shock at exactly r=0.20; post-shock plateau ρ=**61** (exact 64) |
+| **Sedov blast** | spherical | R∝t^**0.398** (exact 0.4); compression **5.6** (exact 6) |
+
+Sod exercises a shock, contact discontinuity, and rarefaction at once; Noh a
+converging stagnation shock (its central density dip is the famous **Noh
+wall-heating** artifact that every standard Lagrangian code shows); Sedov a
+strong diverging blast. Passing these means the ICF results — and any ML trained
+on this solver — rest on a *verified* scheme, not a plausible-looking one.
 
 Simplifications (biggest first) are in the `NOTES` block of `lagrangian_1d.py`:
 no radiation transport or conduction, ideal-gas EOS, single temperature, no
