@@ -47,12 +47,27 @@ For a NIF-scale toy target it delivers a self-consistent **igniting** design:
 
 ![rocket implosion](Rocket%20Implosion/rocket_implosion.png)
 
+### [`1-D Lagrangian Hydro/`](1-D%20Lagrangian%20Hydro) — resolved implosion
+
+A spherical **1-D Lagrangian hydrodynamics** solve (staggered grid, artificial
+viscosity, ideal-gas EOS). Instead of *estimating* stagnation, it *computes* it:
+a driven shell implodes, launches a shock into the gas fill, and the shock
+converges on the origin to form the hot spot — then rebounds.
+
+It reaches a shock-heated hot spot of **10 keV** and **conserves energy to
+≈1%** (the validity check). Being lossless and single-shock, it gets hot but not
+dense (ρR stays low) — an honest illustration of what the ablative compression in
+the models above actually buys you.
+
+![1-D implosion](1-D%20Lagrangian%20Hydro/lagrangian_implosion.png)
+
 ## Running
 
 ```bash
 pip install -r requirements.txt
 python3 "0-D Hotspot/hotspot_0d.py"
 python3 "Rocket Implosion/rocket_implosion.py"
+python3 "1-D Lagrangian Hydro/lagrangian_1d.py"
 ```
 
 Each script prints its headline numbers and saves its figure alongside itself.
@@ -63,16 +78,17 @@ the physics that was deliberately left out.
 
 These are toy models. The largest omissions, roughly in order of impact:
 - **Rayleigh–Taylor instability** — the ablation front is unstable; RT growth is
-  the single effect that most limits real implosions. (Next on the roadmap.)
-- multi-zone hydrodynamics (both models are lumped / single-shell)
+  the single effect that most limits real implosions. (Next on the roadmap; the
+  1-D model can't show it by construction.)
 - radiation transport beyond optically-thin bremsstrahlung
 - separate ion and electron temperatures; electron heat conduction
+- real (Fermi-degenerate) EOS for the cold dense shell
 - pulse shaping, cross-beam effects, laser–plasma instabilities
 
 ## Roadmap
 
+- [x] 1-D Lagrangian hydro (watch the shock converge and form the hot spot)
 - [ ] Rayleigh–Taylor growth on the imploding shell
-- [ ] 1-D Lagrangian radiation-hydro (watch the shock converge and form the hot spot)
 - [ ] couple the implosion output into a time-dependent burn
 
 ---
