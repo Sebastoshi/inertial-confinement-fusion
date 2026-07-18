@@ -120,8 +120,39 @@ These are toy models. The largest omissions, roughly in order of impact:
 - [x] verify the solver against exact solutions (Sod / Noh / Sedov)
 - [x] Rayleigh–Taylor growth on the imploding shell (mechanics + 2D sim)
 - [x] ML surrogate + ignition boundary + inverse design (active learning)
+- [x] on-ramp to real ICF simulation data (JAG) — see below
 - [ ] multi-fidelity ML: transfer-learn from these toys onto MULTI runs
 - [ ] couple the implosion output into a time-dependent burn
+
+## Scaling up: real codes & data
+
+These toys are for intuition and to learn the ML methodology on a system you
+fully control. The natural next steps use real ICF tooling.
+
+**Real simulation data — [JAG](https://github.com/LLNL/macc) (start here).**
+LLNL's open ICF dataset: 10,000 semi-analytic implosion simulations, **5 physics
+inputs → 15 scalar diagnostics + four 64×64 X-ray images**, MIT-licensed and
+downloadable (`data/icf-jag-10k.tar.gz`). It has the same shape as the rocket
+surrogate here (design → outcome), so the [`ML Surrogate`](ML%20Surrogate)
+pipeline carries over almost directly — `ML Surrogate/jag_surrogate.py` does
+exactly that. The one honest difference: JAG is a *fixed dataset*, not a callable
+simulator, so surrogate proposals can't be re-verified the way the rocket model's
+could — that gap is what a live code (below) fills.
+
+**Real mid-fidelity code — [MULTI-IFE](https://data.mendeley.com/datasets/cnrvy8czt7/1)
+(Ramis, [CPC 2016](https://www.sciencedirect.com/science/article/abs/pii/S0010465516300297)).**
+A 1-D spherical Lagrangian rad-hydro code with two-temperature plasma, laser
+ray-tracing, multigroup radiation transport, **DT burn and alpha diffusion** —
+the physics these toys omit. Free for academic use under the **CPC license (not
+open-source — link to it, don't redistribute)**; Fortran, compiled locally.
+Contact: Rafael Ramis, UPM. Use it as ground truth to benchmark the 1-D
+Lagrangian solver here, and to generate burn-inclusive training data.
+
+**The technique that connects them — transfer learning.** Pre-train a surrogate
+on cheap low-fidelity data (these toys), fine-tune on a handful of expensive
+high-fidelity runs (MULTI). See [Humbird et al., *Transfer Learning to Model ICF
+Experiments*](https://www.semanticscholar.org/paper/Transfer-Learning-to-Model-Inertial-Confinement-Humbird-Peterson/25559fb4cadd3f1180bc998e0f25550da9eeb191)
+and [*Transfer-learning design optimization for ICF* (arXiv 2205.13519)](https://arxiv.org/pdf/2205.13519).
 
 ---
 
