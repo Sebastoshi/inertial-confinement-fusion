@@ -135,9 +135,11 @@ inputs → 15 scalar diagnostics + four 64×64 X-ray images**, MIT-licensed and
 downloadable (`data/icf-jag-10k.tar.gz`). It has the same shape as the rocket
 surrogate here (design → outcome), so the [`ML Surrogate`](ML%20Surrogate)
 pipeline carries over almost directly — `ML Surrogate/jag_surrogate.py` does
-exactly that. The one honest difference: JAG is a *fixed dataset*, not a callable
-simulator, so surrogate proposals can't be re-verified the way the rocket model's
-could — that gap is what a live code (below) fills.
+exactly that, and is **verified end-to-end on the real 10k dataset: median test
+R² = 0.999** across all 15 diagnostics. The one honest difference: JAG is a
+*fixed dataset*, not a callable simulator, so surrogate proposals can't be
+re-verified the way the rocket model's could — that gap is what a live code
+(below) fills.
 
 **Real mid-fidelity code — [MULTI-IFE](https://data.mendeley.com/datasets/cnrvy8czt7/1)
 (Ramis, [CPC 2016](https://www.sciencedirect.com/science/article/abs/pii/S0010465516300297)).**

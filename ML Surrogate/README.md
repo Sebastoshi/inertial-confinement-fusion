@@ -57,6 +57,32 @@ it converges to a design that is **verified to genuinely ignite** (real-sim
 at this extreme-corner design — which is precisely why every proposed design is
 checked against the simulator rather than trusted.
 
+## Same pipeline, real ICF data — `jag_surrogate.py`
+
+The point of learning the methodology on a toy is that it transfers. This script
+runs the same surrogate pipeline on LLNL's open **[JAG dataset](https://github.com/LLNL/macc)**
+— 10,000 semi-analytic ICF implosions mapping 5 physics inputs (`stopping_mult`,
+`radiation_mult`, `ablation_cv`, `Vi`, `conduction_mult`) to 15 scalar
+diagnostics — and it works essentially unchanged:
+
+![JAG surrogate](jag_surrogate.png)
+
+- **median test R² = 0.999** across all 15 real diagnostics (worst 0.993)
+- the sensitivity panel recovers real physics from data (e.g. diagnostic #2 is
+  driven mostly by `ablation_cv`, secondarily `radiation_mult`)
+
+```bash
+git clone https://github.com/LLNL/macc
+mkdir -p jag_data && tar -xzf macc/data/icf-jag-10k.tar.gz -C jag_data
+python3 jag_surrogate.py --data jag_data     # or --synthetic to smoke-test
+```
+
+The script auto-detects the input/scalar arrays by shape, so it doesn't depend on
+file names. The honest difference from the rocket case: JAG is a *fixed dataset*,
+not a callable simulator — so a proposed design can't be re-verified by
+re-running it (the active-learning loop above needed that). Closing that gap is
+what a live code like MULTI-IFE is for.
+
 ## Where this goes next
 
 - **Multi-fidelity / transfer learning** — pre-train on this cheap model,
