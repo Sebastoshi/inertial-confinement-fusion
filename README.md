@@ -88,6 +88,25 @@ it lands a design **verified** to ignite.
 
 ![ML surrogate](ML%20Surrogate/ml_ignition.png)
 
+### [`Lasers and Pulse Compression/`](Lasers%20and%20Pulse%20Compression) — drivers & pulse shaping
+
+Hardware that builds and shapes the laser pulses these implosions need. A
+**KrF excimer laser** (248 nm deep-UV, the direct-drive driver behind NRL's
+Nike/Electra) as a gain-switched rate-equation model — ~83% extraction, ~10 ns
+gain-switch delay — and a **stimulated-Brillouin-scattering compression cell**
+that squeezes an 11 ns pump into a 1.3 ns Stokes pulse (~9×, ~74% efficient).
+
+![SBS compression](Lasers%20and%20Pulse%20Compression/sbs_compression.png)
+
+### [`Plasma Thermalization/`](Plasma%20Thermalization) — molecular energy relaxation
+
+Cold **CaH molecules** dropped into a hot plasma thermalize their translational,
+rotational, and vibrational modes on wildly separated clocks (1.2 / 4 / 1230 µs)
+— the multi-temperature relaxation picture, with real CaH spectroscopic
+constants.
+
+![CaH thermalization](Plasma%20Thermalization/cah_thermalization.png)
+
 ## Running
 
 ```bash
@@ -99,6 +118,9 @@ python3 "1-D Lagrangian Hydro/hydro_validation.py"   # verify the solver vs exac
 python3 "Rayleigh-Taylor/rt_mechanics.py"
 python3 "Rayleigh-Taylor/rt_2d.py"
 python3 "ML Surrogate/ml_ignition.py"                # needs scikit-learn
+python3 "Lasers and Pulse Compression/excimer_laser.py"
+python3 "Lasers and Pulse Compression/sbs_compression.py"
+python3 "Plasma Thermalization/cah_thermalization.py"
 ```
 
 Each script prints its headline numbers and saves its figure alongside itself.
