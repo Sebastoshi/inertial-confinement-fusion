@@ -88,13 +88,14 @@ it lands a design **verified** to ignite.
 
 ![ML surrogate](ML%20Surrogate/ml_ignition.png)
 
-### [`Lasers and Pulse Compression/`](Lasers%20and%20Pulse%20Compression) — drivers & pulse shaping
+### [`Lasers and Pulse Compression/`](Lasers%20and%20Pulse%20Compression) — the Xcimer Energy driver
 
-Hardware that builds and shapes the laser pulses these implosions need. A
-**KrF excimer laser** (248 nm deep-UV, the direct-drive driver behind NRL's
-Nike/Electra) as a gain-switched rate-equation model — ~83% extraction, ~10 ns
-gain-switch delay — and a **stimulated-Brillouin-scattering compression cell**
-that squeezes an 11 ns pump into a 1.3 ns Stokes pulse (~9×, ~74% efficient).
+Models of [Xcimer Energy](https://xcimer.energy)'s KrF inertial-fusion driver: a
+**long-pulse KrF (248 nm) amplifier** (~µs, 96 kJ Argos-class), an **SBS
+compression cell** in low-pressure noble gas (~140× compression at ~89%
+efficiency, toward Xcimer's µs→3 ns / ~1000× target), and a comparison of
+**excimer gas mixtures** (ArF / KrF / XeCl / XeF) showing why KrF at 248 nm is
+the practical direct-drive choice.
 
 ![SBS compression](Lasers%20and%20Pulse%20Compression/sbs_compression.png)
 
@@ -120,6 +121,7 @@ python3 "Rayleigh-Taylor/rt_2d.py"
 python3 "ML Surrogate/ml_ignition.py"                # needs scikit-learn
 python3 "Lasers and Pulse Compression/excimer_laser.py"
 python3 "Lasers and Pulse Compression/sbs_compression.py"
+python3 "Lasers and Pulse Compression/excimer_mixtures.py"
 python3 "Plasma Thermalization/cah_thermalization.py"
 ```
 

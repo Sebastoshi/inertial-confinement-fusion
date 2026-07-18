@@ -1,21 +1,23 @@
 """
-KrF excimer laser -- gain-switched oscillator rate-equation model.
+KrF excimer laser -- Xcimer Energy long-pulse architecture.
 
-Excimer lasers are the deep-UV workhorses of direct-drive ICF (e.g. NRL's Nike /
-Electra KrF systems): 248 nm light with excellent beam uniformity and broad
-bandwidth for beam smoothing. The gain medium is special -- KrF* is a *bound*
-excited state that *dissociates* the instant it emits, so the lower laser level
-empties itself and the medium behaves like an ideal 4-level system with a very
-short (~ns) upper-state lifetime. That makes it naturally gain-switched: you
-pump hard and fast (electron beam) and a short intense pulse follows.
+Xcimer Energy's inertial-fusion driver is built around large e-beam-pumped KrF
+(248 nm) amplifiers -- the "Large Xcimer Amplifier" / Argos module (>100 kJ).
+Their key move is counterintuitive: instead of generating the short (~ns) pulse
+fusion needs directly, they generate a cheap, low-peak-power MICROSECOND pulse in
+the excimer amplifier (they hold the record for the longest KrF laser pulse) and
+then compress it ~1000x down to ~3 ns later with stimulated Brillouin scattering
+(see sbs_compression.py). Long-pulse generation keeps the optics below damage
+threshold and the pulsed-power cheap -- the enabling trick for low $/joule.
 
-This models a KrF oscillator with the standard two coupled rate equations:
+This models the long-pulse KrF amplifier stage with the two coupled laser rate
+equations (upper-state density + cavity photon density). KrF's bound-free upper
+state dissociates the instant it emits, so the lower level self-empties and the
+medium is an ideal 4-level system with a short (~2 ns) upper-state lifetime --
+which is exactly why it can be run as an efficient quasi-CW long-pulse extractor.
 
-    dN/dt   = P(t) - c*sigma*N*phi - N/tau_up          (upper-state density)
-    dphi/dt = c*sigma*N*phi - phi/tau_c + seed         (cavity photon density)
-
-and reports the output pulse, extraction efficiency, and the gain-switching
-delay between pump and laser pulse.
+    dN/dt   = P(t) - c*sigma*N*phi - N/tau_up
+    dphi/dt = c*sigma*N*phi - phi/tau_c + seed
 
 Run:  python3 excimer_laser.py
 Deps: numpy, scipy, matplotlib
@@ -25,36 +27,44 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 # ----------------------------------------------------------------------------
-# Physical constants and KrF parameters (CGS-ish: cm, s, cm^-3)
+# Constants and KrF parameters (cm, s, cm^-3)
 # ----------------------------------------------------------------------------
-C_LIGHT = 3.0e10            # speed of light [cm/s]
+C_LIGHT = 3.0e10
 H_PLANCK = 6.626e-34
-LAMBDA = 248e-9            # KrF wavelength [m]
-HNU = H_PLANCK * 3.0e8 / LAMBDA           # photon energy [J]  (~5.0 eV)
+LAMBDA = 248e-9
+HNU = H_PLANCK * 3.0e8 / LAMBDA            # KrF photon energy [J] (~5.0 eV)
 
 SIGMA   = 2.5e-16          # stimulated-emission cross section [cm^2]
 TAU_UP  = 2.0e-9           # effective upper-state lifetime [s] (quenching-limited)
-BETA    = 1.0e-6           # spontaneous fraction seeding the lasing mode
+BETA    = 1.0e-6           # spontaneous fraction seeding the mode
 
-# Cavity
-L_CAV   = 100.0            # cavity length [cm]
-L_GAIN  = 60.0             # gain-medium length [cm]
-AREA    = 1.0             # beam cross-section [cm^2]
-T_OC    = 0.30            # output-coupler transmission
-LOSS    = 0.04            # parasitic round-trip loss
-T_RT    = 2.0 * L_CAV / C_LIGHT                    # round-trip time [s]
-TAU_C   = T_RT / (T_OC + LOSS)                     # cavity photon lifetime [s]
-FILL    = L_GAIN / L_CAV                            # gain fill factor
+# Amplifier / cavity geometry (Argos-scale module)
+L_CAV   = 200.0            # optical length [cm]
+L_GAIN  = 150.0            # gain length [cm]
+AREA    = 25000.0         # aperture [cm^2] (~1.6x1.6 m) -> ~100 kJ, Argos-class
+T_OC    = 0.30
+LOSS    = 0.04
+T_RT    = 2.0 * L_CAV / C_LIGHT
+TAU_C   = T_RT / (T_OC + LOSS)
+FILL    = L_GAIN / L_CAV
 
-# Pump (electron-beam deposition into KrF*): Gaussian in time
-PUMP_PEAK = 6.0e24         # peak pump rate [cm^-3 s^-1]
-PUMP_T0   = 25.0e-9        # pump centre [s]
-PUMP_FWHM = 22.0e-9        # pump FWHM [s]
+# Long e-beam pump: microsecond flat-top (the Xcimer long pulse). Pump level set
+# so the extraction fluence stays a few J/cm^2 -- low enough for the optics,
+# which is the whole reason for going long-pulse then compressing later.
+PUMP_PEAK  = 4.0e22        # peak pump rate [cm^-3 s^-1]
+PUMP_START = 50e-9
+PUMP_DUR   = 1000e-9       # 1 microsecond flat-top
+PUMP_EDGE  = 20e-9
+
+# Xcimer SBS downstream: microsecond pulse compressed ~1000x to ~3 ns
+SBS_OUT_NS = 3.0
+SBS_RATIO  = 1000.0
 
 
 def pump(t):
-    s = PUMP_FWHM / 2.3548
-    return PUMP_PEAK * np.exp(-0.5 * ((t - PUMP_T0) / s) ** 2)
+    up = 0.5 * (1 + np.tanh((t - PUMP_START) / PUMP_EDGE))
+    dn = 0.5 * (1 + np.tanh((PUMP_START + PUMP_DUR - t) / PUMP_EDGE))
+    return PUMP_PEAK * up * dn
 
 
 def rhs(t, y):
@@ -67,48 +77,46 @@ def rhs(t, y):
 
 
 def run():
-    t_end = 90e-9
+    t_end = PUMP_START + PUMP_DUR + 120e-9
     sol = solve_ivp(rhs, (0.0, t_end), [0.0, 1.0], method="LSODA",
-                    rtol=1e-8, atol=1e-2, dense_output=True, max_step=2e-11)
-    t = np.linspace(0.0, t_end, 4000)
-    N, phi = sol.sol(t)
-    N = np.maximum(N, 0.0); phi = np.maximum(phi, 0.0)
+                    rtol=1e-7, atol=1e-2, dense_output=True, max_step=1e-9)
+    t = np.linspace(0.0, t_end, 6000)
+    N, phi = np.maximum(sol.sol(t), 0.0)
 
-    # output power through the coupler: photons leaving * photon energy
-    Vmode = AREA * L_CAV                                # cm^3
+    Vmode = AREA * L_CAV
     P_out = phi * Vmode * HNU * (T_OC / T_RT)           # W
-    P_pump = pump(t) * (AREA * L_GAIN) * HNU            # W (into upper state)
+    P_pump = pump(t) * (AREA * L_GAIN) * HNU            # W
 
     E_out = np.trapz(P_out, t)
     E_pump = np.trapz(P_pump, t)
     eta = E_out / E_pump if E_pump > 0 else 0.0
-    N_th = 1.0 / (C_LIGHT * SIGMA * TAU_C)              # lasing threshold density
+    N_th = 1.0 / (C_LIGHT * SIGMA * TAU_C)
 
-    # pulse metrics
-    ipk = int(np.argmax(P_out))
-    half = P_out > 0.5 * P_out[ipk]
-    fwhm = (t[half][-1] - t[half][0]) if half.any() else 0.0
-    delay = t[ipk] - PUMP_T0
+    lasing = P_out > 0.5 * P_out.max()
+    pulse_dur = (t[lasing][-1] - t[lasing][0]) if lasing.any() else 0.0
+    fluence = E_out / AREA                               # J/cm^2
     return dict(t=t, N=N, phi=phi, P_out=P_out, P_pump=P_pump,
                 E_out=E_out, E_pump=E_pump, eta=eta, N_th=N_th,
-                fwhm=fwhm, delay=delay, t_pk=t[ipk], P_pk=P_out[ipk])
+                pulse_dur=pulse_dur, fluence=fluence, P_pk=P_out.max())
 
 
 def report(d):
-    print("=" * 60)
-    print("  KrF EXCIMER LASER  --  gain-switched oscillator")
-    print("=" * 60)
-    print(f"  wavelength / photon energy : 248 nm / {HNU/1.602e-19:.2f} eV")
-    print(f"  small-signal threshold N   : {d['N_th']:.2e} cm^-3")
+    print("=" * 62)
+    print("  KrF EXCIMER (248 nm)  --  Xcimer long-pulse amplifier")
+    print("=" * 62)
+    print(f"  photon energy              : {HNU/1.602e-19:.2f} eV @ 248 nm")
+    print(f"  aperture                   : {AREA:.0f} cm^2 (~{np.sqrt(AREA):.0f}x{np.sqrt(AREA):.0f} cm)")
     print(f"  peak upper-state density   : {d['N'].max():.2e} cm^-3 "
           f"({d['N'].max()/d['N_th']:.0f}x threshold)")
-    print("-" * 60)
-    print(f"  output pulse FWHM          : {d['fwhm']*1e9:6.1f} ns")
-    print(f"  gain-switch delay (pk-pump): {d['delay']*1e9:6.1f} ns")
-    print(f"  peak output power          : {d['P_pk']/1e6:6.2f} MW")
-    print(f"  output energy              : {d['E_out']*1e3:6.2f} mJ")
-    print(f"  extraction efficiency      : {100*d['eta']:6.1f} %  (laser out / pumped)")
-    print("=" * 60)
+    print("-" * 62)
+    print(f"  output pulse duration      : {d['pulse_dur']*1e9:7.0f} ns  (long pulse)")
+    print(f"  extraction fluence         : {d['fluence']:7.2f} J/cm^2")
+    print(f"  output energy              : {d['E_out']/1e3:7.1f} kJ  (Argos-class ~100 kJ)")
+    print(f"  extraction efficiency      : {100*d['eta']:7.1f} %  (laser out / pumped)")
+    print("-" * 62)
+    print(f"  -> SBS compressor: {d['pulse_dur']*1e9:.0f} ns / {SBS_RATIO:.0f} "
+          f"-> ~{SBS_OUT_NS:.0f} ns for the target")
+    print("=" * 62)
 
 
 def make_figure(d, fname="excimer_laser.png"):
@@ -116,47 +124,41 @@ def make_figure(d, fname="excimer_laser.png"):
     t = d["t"] * 1e9
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.6))
 
-    # (1) pump and upper-state population
+    # (1) pump and inversion (log) over the microsecond pulse
     a = ax[0]
-    a.plot(t, d["P_pump"] / 1e6, "tab:orange", lw=2, label="e-beam pump")
-    a.set_xlabel("time [ns]"); a.set_ylabel("pump power [MW]", color="tab:orange")
+    a.plot(t, d["P_pump"] / 1e9, "tab:orange", lw=2, label="e-beam pump")
+    a.set_xlabel("time [ns]"); a.set_ylabel("pump power [GW]", color="tab:orange")
     a.tick_params(axis="y", labelcolor="tab:orange")
     a2 = a.twinx()
-    a2.plot(t, np.maximum(d["N"], 1e10), "tab:blue", lw=2, label="KrF* density")
+    a2.plot(t, np.maximum(d["N"], 1e10), "tab:blue", lw=2)
     a2.axhline(d["N_th"], color="tab:blue", ls=":", lw=1)
-    a2.text(42, d["N_th"] * 1.4, "lasing threshold", color="tab:blue", fontsize=8)
+    a2.text(t[-1] * 0.5, d["N_th"] * 1.4, "lasing threshold", color="tab:blue", fontsize=8)
     a2.set_yscale("log"); a2.set_ylim(1e11, 3e15)
     a2.set_ylabel("upper-state N [cm$^{-3}$]", color="tab:blue")
     a2.tick_params(axis="y", labelcolor="tab:blue")
-    a.set_title("pump builds inversion; it overshoots,\nfires the pulse, then decays past threshold")
+    a.set_title("microsecond e-beam pump drives\nquasi-steady KrF lasing")
 
-    # (2) output laser pulse vs pump (gain-switch delay)
+    # (2) the long output pulse
     b = ax[1]
-    b.plot(t, d["P_pump"] / d["P_pump"].max(), "tab:orange", lw=1.5, alpha=0.7,
-           label="pump (norm.)")
-    b.plot(t, d["P_out"] / d["P_out"].max(), "tab:red", lw=2, label="laser out (norm.)")
-    b.axvline(d["t_pk"] * 1e9, color="tab:red", ls=":", lw=1)
-    b.annotate(f"gain-switch\ndelay {d['delay']*1e9:.0f} ns",
-               xy=(PUMP_T0 * 1e9, 0.5), xytext=(d["t_pk"] * 1e9 + 3, 0.55),
-               fontsize=8, arrowprops=dict(arrowstyle="<->", lw=0.8))
-    b.set_xlabel("time [ns]"); b.set_ylabel("normalized power")
-    b.set_title(f"gain-switched pulse: {d['fwhm']*1e9:.0f} ns FWHM")
-    b.legend(fontsize=9)
+    b.plot(t, d["P_out"] / 1e9, "tab:red", lw=2)
+    b.set_xlabel("time [ns]"); b.set_ylabel("output power [GW]")
+    b.set_title(f"long-pulse output: {d['pulse_dur']*1e9:.0f} ns, "
+                f"{d['E_out']/1e3:.0f} kJ")
 
-    # (3) efficiency vs pump energy (scan)
+    # (3) the Xcimer pipeline: long pulse -> SBS -> ~3 ns (log time)
     c = ax[2]
-    global PUMP_PEAK
-    p0 = PUMP_PEAK
-    scales = np.linspace(0.3, 3.0, 16)
-    etas, eouts = [], []
-    for s in scales:
-        PUMP_PEAK = p0 * s
-        r = run()
-        etas.append(100 * r["eta"]); eouts.append(r["E_out"] * 1e3)
-    PUMP_PEAK = p0
-    c.plot(np.array(eouts), etas, "o-", ms=3, color="tab:green")
-    c.set_xlabel("output energy [mJ]"); c.set_ylabel("extraction efficiency [%]")
-    c.set_title("efficiency rises then saturates\nwith harder pumping")
+    long_ns = d["pulse_dur"] * 1e9
+    tt = np.logspace(-1, np.log10(long_ns * 1.5), 500)
+    long_pulse = np.where((tt > 5) & (tt < long_ns + 5), 1.0, 0.0)
+    comp = np.exp(-0.5 * ((tt - SBS_OUT_NS) / (SBS_OUT_NS / 2.3548)) ** 2)
+    c.semilogx(tt, long_pulse, "tab:red", lw=2, label=f"KrF out (~{long_ns:.0f} ns)")
+    c.semilogx(tt, comp, "tab:purple", lw=2, label=f"after SBS (~{SBS_OUT_NS:.0f} ns)")
+    c.annotate(f"SBS compress\n~{SBS_RATIO:.0f}x", xy=(SBS_OUT_NS, 0.6),
+               xytext=(20, 0.55), fontsize=8,
+               arrowprops=dict(arrowstyle="->", lw=0.8))
+    c.set_xlabel("time [ns] (log)"); c.set_ylabel("normalized power")
+    c.set_title("the Xcimer pipeline:\ncheap long pulse -> SBS -> fusion pulse")
+    c.legend(fontsize=8, loc="upper left")
 
     fig.tight_layout()
     fig.savefig(fname, dpi=130)
@@ -180,20 +182,20 @@ if __name__ == "__main__":
 # ----------------------------------------------------------------------------
 # NOTES / things to try -------------------------------------------------------
 #
-# * The gain-switch delay (panel 2): the laser pulse lags the pump because the
-#   inversion must build past threshold before the photon avalanche fires. Pump
-#   harder (raise PUMP_PEAK) and the delay shrinks and the pulse sharpens.
+# * The whole point of the long pulse: peak power stays low (panel 2 is in GW,
+#   not TW), so the amplifier optics never see damaging intensity -- the pulse is
+#   only compressed to fusion-relevant power AFTER the expensive optics, in the
+#   SBS gas cell. That is what makes Xcimer's $/joule low.
 #
-# * The short upper-state lifetime (TAU_UP ~ 2 ns, quenching-limited) is the
-#   excimer signature -- it forces fast pumping and gives the naturally short
-#   pulse. Lengthen it and the laser behaves more like a storage laser.
+# * KrF at 248 nm is chosen for direct-drive ICF: short wavelength couples
+#   efficiently to the ablator and suppresses laser-plasma instabilities. See
+#   excimer_mixtures.py for how the other excimer gases compare.
 #
-# * KrF for ICF (NRL Nike/Electra): 248 nm couples well to the ablator, and the
-#   broad bandwidth enables induced-spatial-incoherence beam smoothing -- key for
-#   the direct-drive uniformity these implosion models assume.
+# * Argos-scale here (~100 kJ/module); Xcimer's roadmap stacks ~40 modules ->
+#   Vulcan at 4-12 MJ. Scale AREA to move along that line.
 #
-# Simplifications: single longitudinal mode, spatially lumped cavity (no
-# transverse profile or ASE), fixed effective upper-state lifetime (real KrF
-# kinetics is a multi-species plasma-chemistry network: e-beam -> Kr+/F- ->
-# KrF*), and no saturable absorber or injection seeding.
+# Simplifications: single-mode lumped cavity (no transverse profile, ASE, or
+# amplified-spontaneous background), fixed effective upper-state lifetime (real
+# KrF is an e-beam plasma-chemistry network), and the SBS stage is only sketched
+# here -- the actual compression physics is in sbs_compression.py.
 # ----------------------------------------------------------------------------
