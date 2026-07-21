@@ -86,16 +86,16 @@ def performance(a2, a4=0.0, a6=0.0, fwd=None):
 # Illustrative ONLY -- a stand-in for a radiation-transport / view-factor solve.
 # It gives the ML phase real geometry knobs to turn.
 # ----------------------------------------------------------------------------
-def geometry_to_asymmetry(case_to_capsule=5.5, leh_fraction=0.5, cone_balance=0.0):
-    """geometry -> (a2, a4) flux-asymmetry amplitudes.
+def geometry_to_asymmetry(case_to_capsule=3.0, length_to_diameter=1.5,
+                          leh_radius_frac=0.5, inner_frac=0.5):
+    """geometry -> (a2, a4) via the hohlraum view-factor model.
 
-    case_to_capsule : hohlraum-radius / capsule-radius (symmetry vs efficiency)
-    leh_fraction    : laser-entrance-hole area fraction at the poles (cold poles -> P2)
-    cone_balance    : inner-vs-outer laser cone power trim in [-1, 1] (tunes P2)
+    Delegates to hohlraum_viewfactor.symmetry(), an actual radiative-exchange
+    calculation of the drive pattern (replaces the earlier heuristic).
     """
-    a2 = 0.45 * (leh_fraction - 0.5) - 0.18 * cone_balance + 0.02 * (case_to_capsule - 5.5)
-    a4 = 0.20 * (leh_fraction - 0.5) + 0.05 * cone_balance
-    return abs(a2), abs(a4)
+    from hohlraum_viewfactor import symmetry
+    a2, a4, _ = symmetry(case_to_capsule, length_to_diameter, leh_radius_frac, inner_frac)
+    return a2, a4
 
 
 def report():
@@ -115,13 +115,13 @@ def report():
         print(f"    a2 = {a2*100:5.1f}%   RMS distortion {rms*100:5.1f}%   "
               f"YOC {yoc:5.2f}  |{bar}")
     print("-" * 66)
-    print("  hohlraum geometry -> asymmetry -> YOC (view-factor heuristic):")
-    for name, kw in [("balanced",     dict(leh_fraction=0.50, cone_balance=0.0)),
-                     ("large LEH",    dict(leh_fraction=0.70, cone_balance=0.0)),
-                     ("cone-trimmed", dict(leh_fraction=0.70, cone_balance=0.8))]:
+    print("  hohlraum geometry -> asymmetry -> YOC (view-factor model):")
+    for name, kw in [("nominal cones", dict(inner_frac=0.50)),
+                     ("more inner",    dict(inner_frac=0.35)),
+                     ("tuned cones",   dict(inner_frac=0.62))]:
         a2, a4 = geometry_to_asymmetry(**kw)
         yoc, rms = performance(a2, a4, fwd=fwd)
-        print(f"    {name:13s}: a2={a2*100:4.1f}% a4={a4*100:4.1f}%  ->  YOC {yoc:5.2f}")
+        print(f"    {name:13s}: a2={a2*100:+5.1f}% a4={a4*100:+5.1f}%  ->  YOC {yoc:5.2f}")
     print("=" * 66)
     print("  performance(a2, a4, a6, fwd) is closed-form -> ready for an ML sweep.")
     print("=" * 66)
@@ -168,18 +168,18 @@ def make_figure(fwd, fname="hohlraum_asymmetry.png"):
     ax3.set_ylim(0, 1.05); ax3.set_title("yield collapses with drive asymmetry", fontsize=10)
     ax3.legend(fontsize=9)
 
-    # (4) geometry sweep: YOC vs LEH fraction and cone balance
+    # (4) geometry sweep: YOC vs inner-cone balance for two LEH sizes
     ax4 = fig.add_subplot(2, 2, 4)
-    leh = np.linspace(0.35, 0.75, 40)
-    for cb, col, lab in [(0.0, "tab:blue", "no cone trim"), (0.8, "tab:green", "cone-trimmed")]:
+    inner = np.linspace(0.25, 0.80, 40)
+    for lrf, col, lab in [(0.50, "tab:blue", "LEH 0.50"), (0.60, "tab:green", "LEH 0.60")]:
         yv = []
-        for L in leh:
-            a2, a4 = geometry_to_asymmetry(leh_fraction=L, cone_balance=cb)
+        for f in inner:
+            a2, a4 = geometry_to_asymmetry(leh_radius_frac=lrf, inner_frac=f)
             yv.append(performance(a2, a4, fwd=fwd)[0])
-        ax4.plot(leh, yv, col, lw=2.2, label=lab)
-    ax4.set_xlabel("LEH area fraction"); ax4.set_ylabel("YOC")
+        ax4.plot(inner, yv, col, lw=2.2, label=lab)
+    ax4.set_xlabel("inner-cone power fraction"); ax4.set_ylabel("YOC")
     ax4.set_ylim(0, 1.05)
-    ax4.set_title("hohlraum geometry -> YOC\n(view-factor heuristic; ML target)", fontsize=10)
+    ax4.set_title("hohlraum geometry -> YOC\n(view-factor; ML target)", fontsize=10)
     ax4.legend(fontsize=9)
 
     fig.suptitle("Hohlraum drive asymmetry: low-mode P2/P4 distorts the hot spot "
