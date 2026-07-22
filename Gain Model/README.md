@@ -137,6 +137,45 @@ to nominal, preserving the anchor) and re-optimizes. Two payoffs:
   100%** margin and a higher worst case — "max gain" becomes "max *robust* gain," the
   number a real ignition program optimizes.
 
-The next open piece is **Step 4** — a proper UQ (Sobol indices, tolerance→yield
-variance) to rank *which* spec drives the scatter, turning these tolerances into
-engineering requirements.
+## Step 4 — UQ: which tolerance is the scatter, and which spec to buy
+
+Step 3 leaves a concrete engineering question: of the four tolerances, which one
+actually drives the shot-to-shot variance, and therefore which spec is worth
+tightening? **`uq_sobol.py`** answers it with a variance-based global sensitivity
+analysis — Sobol indices, estimated by Saltelli sampling + the Jansen estimators
+(no SALib dependency) — of gain as a function of the four tolerance channels.
+
+```bash
+python3 uq_sobol.py
+```
+
+![Sobol UQ](uq_sobol.png)
+
+At the robust design, the **total** Sobol index ranks the variance drivers:
+
+| tolerance | first-order S_i | total S_Ti |
+|---|---|---|
+| **surface finish** | 0.15 | **0.51** |
+| drive symmetry | 0.25 | 0.36 |
+| adiabat (shock timing) | 0.03 | 0.35 |
+| laser energy | ~0 | ~0 |
+
+Three results, each with teeth:
+
+- **Surface finish is the scatter.** Highest total index at both design points — the
+  first spec to tighten.
+- **Adiabat matters *only through interactions*** (`S_Ti = 0.35 ≫ S_i = 0.03`): on its
+  own it looks negligible, but combined with surface finish it pushes the design past
+  the mix cliff. A one-at-a-time sensitivity sweep would miss this entirely — which is
+  exactly why a variance-based (Sobol) method is the right tool near a cliff.
+- **Laser energy is irrelevant** (`S ≈ 0`), consistent with every prior step: above the
+  ignition cliff, gain is not set by piling on laser.
+
+The closing **spec-tightening** study makes it actionable — halve each tolerance and
+re-measure the gain std: adiabat −19%, surface finish −18% (a near tie), drive
+symmetry −13%, laser energy nothing. So a real program would spend its budget on
+**shock timing and capsule surface finish** and not waste it on laser-energy
+reproducibility. Turning tolerances into ranked requirements is the whole point.
+
+Still open: **Step 5** — unit tests / CI enforcing the validation limits, and an
+interactive dashboard.
