@@ -107,13 +107,18 @@ python3 hohlraum_viewfactor.py
 
 ![hohlraum view factor](hohlraum_viewfactor.png)
 
-A reduced **view-factor** calculation of the X-ray flux a gold hohlraum delivers
-to the capsule: integrate radiative exchange over every wall element (cylinder +
-end-caps minus the dark LEH holes), with inner/outer laser-cone rings, then
-decompose the incident flux into Legendre modes. Validated by construction:
+A **multi-bounce radiosity** calculation of the X-ray flux a gold hohlraum
+delivers to the capsule. The wall re-emits a fraction (the **albedo**, ~0.85) of
+every X-ray that lands on it, so the radiation bounces many times before it
+escapes the LEH or is absorbed by the capsule — and that is what smooths the
+drive. The transport is solved as a linear radiosity system over axisymmetric
+rings (`P = E + albedo·VFᵀ·P`), then the equilibrium wall brightness is integrated
+onto the capsule and decomposed into Legendre modes. Validated by construction:
 
 - **odd modes vanish** to ~1e-16 (top/bottom symmetry),
-- **inner/outer cone balance tunes P2 through zero** (symmetric at `inner_frac ≈ 0.62`),
+- **raising the albedo smooths the drive** — at a fixed cone imbalance `|P2|` falls
+  from ~68 % (single-bounce, `albedo = 0`) to a few percent by `albedo ≈ 0.9`,
+- **inner/outer cone balance tunes P2 through zero** (symmetric at `inner_frac ≈ 0.40`),
 - a **bigger LEH → colder poles → P2 drops**.
 
 `symmetry(geometry) → (a2, a4, a6)` is the map the next two scripts consume.
@@ -127,16 +132,19 @@ python3 hohlraum_asymmetry.py
 ![hohlraum asymmetry](hohlraum_asymmetry.png)
 
 Low-mode P2/P4 drive asymmetry → a velocity asymmetry → a ballistic offset,
-amplified by the convergent-RT growth factors, distorts the hot spot into a peanut
-and collapses yield-over-clean (YOC):
+amplified by the convergent-RT growth factors, distorts the hot spot into a peanut.
+The distortion then feeds the **repo's own 0-D ignition model** (`0-D Hotspot/`):
+residual kinetic energy lowers the hot-spot temperature, the thin peanut waist
+lowers the confining areal density, and the yield is the burn-up fraction of that
+degraded hot spot relative to a round one. **The sharp YOC collapse is the
+ignition cliff, not a fitted curve:**
 
 | P2 drive asymmetry | 1 % | 2 % | 5 % |
 |---|---|---|---|
-| YOC | 0.93 | 0.76 | 0.19 |
+| YOC | 0.72 | 0.35 | 0.02 |
 
-A few percent is enough to kill it — which is *why* NIF holds drive symmetry to
-sub-percent. `performance(a2, a4, a6)` is closed form (the mode transfer factors
-are precomputed), so it is the fast objective the ML samples.
+A percent or two is enough to fall off the cliff — which is *why* NIF holds drive
+symmetry to sub-percent. `performance(a2, a4, a6)` is the objective the ML samples.
 
 ### `hohlraum_ml.py` — search the geometry for better symmetry
 
@@ -151,12 +159,14 @@ deterministic forward model. A scikit-learn `MLPRegressor` surrogate (Latin-hype
 samples) plus a `differential_evolution` active-learning loop searches the 4-D
 geometry space (case-to-capsule, length/diameter, LEH size, cone balance):
 
-- **nominal design → YOC 0.00** (P2 ≈ +10 %, a peanut hot spot);
-- **ML-found design → YOC ≈ 0.99** (a symmetric geometry, a2 ≈ −0.2 %);
-- **permutation importance**: cone balance ≫ case-to-capsule > aspect ratio > LEH size.
+- **nominal design → YOC 0.03** (asymmetric drive → off the ignition cliff);
+- **ML-found design → YOC ≈ 0.90** (a symmetric geometry, a2 ≈ −0.1 %, a4 ≈ −0.3 %) — a **+88-point** gain;
+- **permutation importance**: cone balance ≫ aspect ratio ≈ LEH size > case-to-capsule.
 
+The best YOC caps below 1 because even sub-percent residual a4 costs yield through
+the ignition cliff — honest, and exactly why real designs chase symmetry so hard.
 The ML doesn't replace the physics — it *learns* it, searches it, and verifies
-every proposed optimum against the real forward model.
+every proposed optimum against the real forward model (surrogate test R² ≈ 0.77).
 
 ## What this is and isn't
 
@@ -165,7 +175,10 @@ ICF-accurate mixing layer: incompressible Boussinesq (real fronts are
 compressible and high-Atwood), single mode (no mode coupling or turbulent mix),
 and 2D. The ablative *stabilization* — the physics that actually saves the
 implosion — lives in the mechanics script, not the 2D sim. The spherical models
-are reduced too: a linear thin-interface convergence ODE, a static grey
-single-bounce view factor, a heuristic YOC closure, and linear drive→shape
-transfer. Each script's `NOTES` block lists the knobs and the simplifications.
-The value is that the ML wrapper is unchanged when any physics stage is upgraded.
+are reduced too: a linear thin-interface convergence ODE, a grey/static/diffuse
+radiosity view factor (no time-dependent symmetry swing, spectral transport, or
+cross-beam energy transfer), a 0-D single-temperature ignition model, and linear
+drive→shape transfer. Each script's `NOTES` block lists the knobs and the
+simplifications. The point is that the ML wrapper is unchanged when any physics
+stage is upgraded — as it already was twice, swapping a heuristic yield for the
+0-D ignition cliff and a single-bounce view factor for multi-bounce radiosity.
