@@ -96,5 +96,47 @@ importance ≈ 0) — above the ignition cliff, gain is set by capsule compressi
 drive symmetry, not by piling on more laser. And the optimizer rails convergence
 high / adiabat low / fuel high, because the reduced model rewards compression
 without charging for the Rayleigh–Taylor instability it costs — which is exactly the
-penalty **Step 3** (multimode RT + mix width + robustness) adds, turning "max gain"
-into "max *robust* gain."
+penalty **Step 3** adds.
+
+## Step 3 — the instability charge + robust design
+
+Step 2's optimizer railed because nothing charged for the Rayleigh–Taylor mix that
+aggressive compression buys. Step 3 supplies that charge and then optimizes for
+*robust* gain under tolerances.
+
+```bash
+python3 build_rt_table.py     # one-time: cache the RT growth spectrum vs CR
+python3 rt_mix.py             # multimode mix width -> ignition-margin penalty
+python3 robust_design_ml.py   # whole-design optimum + chance-constrained robust design
+```
+
+![RT mix penalty](rt_mix.png)
+
+**`rt_mix.py`** turns a capsule surface-roughness *spectrum* into a stagnation mix
+width and a yield multiplier: the seed roughness is amplified by acceleration-phase
+ablative feedthrough (worse at low adiabat), then by deceleration RT + Bell–Plesset
+convergence (`convergent_rt`, cached over CR), summed over modes, and cut off at
+short wavelength by the finite interface thickness. Convergence enters as `f_mix ~
+CR²` (Bell–Plesset amplitude × a shrinking hot spot). Calibrated so the NIF-like
+nominal keeps **85%** of clean yield — mix-degraded but igniting, as N221204 was —
+while Step 2's aggressive corner (CR 44, adiabat 1.6) is **fully quenched**.
+
+![robust design](robust_design_ml.png)
+
+**`robust_design_ml.py`** folds that penalty into the objective (as a factor relative
+to nominal, preserving the anchor) and re-optimizes. Two payoffs:
+
+- **The optimum stops railing.** With the mix charge the deterministic optimum sits
+  at an *interior* CR ≈ 43 / adiabat ≈ 2.3 — a genuine ignition-margin sweet spot —
+  instead of Step 2's railed CR 45 / adiabat 1.6 corner.
+- **Robustness matters.** A real shot scatters — surface finish, drive symmetry,
+  adiabat, delivered energy. Monte-Carlo over those tolerances shows the
+  gain-optimal design sits on the cliff shoulder: nominal gain 7.6, but **std 1.9**
+  and only **90%** of shots clear a useful-yield bar. A **chance-constrained** robust
+  design that backs convergence off to CR ≈ 41 trades ~8% nominal gain for **std 1.3,
+  100%** margin and a higher worst case — "max gain" becomes "max *robust* gain," the
+  number a real ignition program optimizes.
+
+The next open piece is **Step 4** — a proper UQ (Sobol indices, tolerance→yield
+variance) to rank *which* spec drives the scatter, turning these tolerances into
+engineering requirements.
