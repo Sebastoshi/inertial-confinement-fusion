@@ -24,17 +24,42 @@ Run:  python3 hohlraum_asymmetry.py
 Deps: numpy, scipy  (matplotlib only for the optional figure)
 """
 
+import importlib.util
+import os
+
 import numpy as np
 from scipy.special import eval_legendre
 
 from convergent_rt import R0, V_IMP, trajectory, tune_P0, integrate_modes
+
+# Load the repo's 0-D hot-spot ignition model (its folder name has a space and a
+# leading digit, so a normal import won't work -- load it by path).
+_hs_path = os.path.join(os.path.dirname(__file__), "..", "0-D Hotspot", "hotspot_0d.py")
+_spec = importlib.util.spec_from_file_location("hotspot_0d", _hs_path)
+hotspot_0d = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hotspot_0d)
 
 # Fraction of X-ray flux asymmetry that survives conduction / "cloudy-day"
 # smoothing to become a shell velocity asymmetry (illustrative).
 COUPLING    = 0.25
 T_ACCEL     = 1.85e-9                  # acceleration-phase duration [s] (rt_mechanics)
 DRIVE_MODES = np.array([2, 4, 6])      # even low modes a symmetric hohlraum imprints
-YOC_SIGMA   = 0.14                     # RMS shape distortion that drops YOC to 1/e
+
+# Nominal round, igniting hot spot (representative of the converged capsule).
+NOMINAL_RHO  = 300.0                   # g/cm^3
+NOMINAL_RHOR = 1.2                     # g/cm^2  (above the ~0.3 alpha-stopping floor)
+NOMINAL_T0   = 6.0                     # keV     (above the ~4.3 keV ignition temperature)
+# How a distorted hot spot degrades the two ignition variables:
+K_RKE = 10.0                           # residual kinetic energy -> lower T  (~ rms^2)
+K_RR  = 1.5                            # peanut-waist thinning   -> lower rho*R (~ rms)
+_BURNUP_ROUND = None                   # cached burn-up of the round hot spot
+
+
+def _round_burnup():
+    global _BURNUP_ROUND
+    if _BURNUP_ROUND is None:
+        _BURNUP_ROUND = hotspot_0d.burn(NOMINAL_RHO, NOMINAL_RHOR, NOMINAL_T0)["burnup"]
+    return _BURNUP_ROUND
 
 
 # ----------------------------------------------------------------------------
@@ -70,14 +95,22 @@ def hotspot_shape(a_l, fwd, ntheta=400):
 
 def performance(a2, a4=0.0, a6=0.0, fwd=None):
     """Yield-over-clean (YOC) and RMS hot-spot distortion for a drive asymmetry.
-    Closed form given a prebuilt `fwd` -- this is the ML/optimizer objective."""
+
+    The distortion degrades the hot spot -- residual kinetic energy lowers the
+    temperature, and the thin peanut waist lowers the confining areal density --
+    and the yield is then the burn-up fraction from the repo's 0-D ignition model.
+    The sharp YOC collapse is the ignition CLIFF, not a fitted curve."""
     if fwd is None:
         fwd = build_forward()
     theta, shape, _ = hotspot_shape([a2, a4, a6], fwd)
     w = np.sin(theta)                                 # solid-angle weight
     dev = shape - 1.0
     rms = np.sqrt(np.trapezoid(dev**2 * w, theta) / np.trapezoid(w, theta))
-    yoc = float(np.exp(-(rms / YOC_SIGMA) ** 2))
+    # distortion -> lower T (residual flow) and lower rho*R (thin waist)
+    T_eff    = NOMINAL_T0   * (1.0 - min(K_RKE * rms**2, 0.85))
+    rhoR_eff = NOMINAL_RHOR * (1.0 - min(K_RR  * rms,    0.80))
+    burnup = hotspot_0d.burn(NOMINAL_RHO, rhoR_eff, T_eff)["burnup"]
+    yoc = min(float(burnup / _round_burnup()), 1.0)
     return yoc, float(rms)
 
 
