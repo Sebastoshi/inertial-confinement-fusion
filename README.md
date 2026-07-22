@@ -1,5 +1,7 @@
 # Inertial Confinement Fusion — toy simulations
 
+[![validation](https://github.com/Sebastoshi/inertial-confinement-fusion/actions/workflows/ci.yml/badge.svg)](https://github.com/Sebastoshi/inertial-confinement-fusion/actions/workflows/ci.yml)
+
 A growing set of small, self-contained Python models for building physical
 intuition about **inertial confinement fusion (ICF)**. These are deliberately
 *toy* models — a few hundred lines each, runnable on a laptop — not design

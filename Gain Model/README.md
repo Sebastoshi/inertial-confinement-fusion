@@ -177,5 +177,39 @@ symmetry −13%, laser energy nothing. So a real program would spend its budget 
 **shock timing and capsule surface finish** and not waste it on laser-energy
 reproducibility. Turning tolerances into ranked requirements is the whole point.
 
-Still open: **Step 5** — unit tests / CI enforcing the validation limits, and an
-interactive dashboard.
+## Step 5 — lock the physics down (tests + CI) and make it playable
+
+The models are only worth anything if their validation claims stay true as the code
+changes. Step 5 pins them with a test suite and runs it in CI, and adds an interactive
+dashboard so the whole chain can be driven by hand.
+
+```bash
+pip install pytest
+python -m pytest tests/ -q        # 20 validation tests, ~10 s
+```
+
+**`tests/`** is not smoke tests — each case pins a claim the READMEs make, so none can
+silently rot: the gain models reproduce **NIF N221204**; the 1-D hydro **conserves
+energy** to <3% and computes a ~10 keV hot spot; the convergent-RT solver recovers its
+**planar (√(A g k))** and **Bell–Plesset** limits; the multimode mix penalty stays
+**calibrated** (nominal ignites, the aggressive corner quenches, penalty falls with
+convergence); the hohlraum view factor **nulls P2** at the known cone balance; the
+asymmetry model reproduces the **yield cliff**; and the 0-D burn shows the **ignition
+cliff** in temperature. `.github/workflows/ci.yml` runs the suite on every push across
+Python 3.11 / 3.12.
+
+**`dashboard.py`** is a Streamlit front end over the full chain — move the laser,
+capsule, and hohlraum sliders and watch `coupled_gain (hydro T) × RT mix × hohlraum
+symmetry → gain` update live, with an IGNITES / MARGINAL / QUENCHED verdict and the
+ignition-margin cliff plotted against convergence.
+
+```bash
+pip install streamlit
+streamlit run "Gain Model/dashboard.py"
+```
+
+Its compute layer (`evaluate_design`) has no Streamlit dependency, so it is covered by
+the same test suite. That closes the five-step arc: a fast, transparent, NIF-anchored
+`design → gain` model — hot-spot temperature computed by the hydro, compression charged
+for its RT mix, optimized end-to-end for *robust* gain, its tolerances ranked into
+specs, and every claim held in place by CI.

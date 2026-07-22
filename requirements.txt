@@ -2,3 +2,7 @@ numpy>=1.25
 scipy>=1.11
 matplotlib>=3.7
 scikit-learn>=1.3
+
+# optional: validation tests (`pytest tests/`) and the interactive dashboard
+# pytest>=8.0
+# streamlit>=1.30      # streamlit run "Gain Model/dashboard.py"
