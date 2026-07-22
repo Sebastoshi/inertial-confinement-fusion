@@ -58,5 +58,43 @@ A reduced, calibrated model — not a radiation-hydrodynamics code. It will not
 resolve a mix layer or a real hohlraum drive history. Its value is being a fast,
 transparent, end-to-end surrogate that is *anchored to reality*: change the design
 and watch gain move, with every simplification written down in the `NOTES`.
-Next up: replace the stagnation scalings with the 1-D Lagrangian hydro so the
-hot-spot conditions are computed rather than fit.
+
+## Coupled model — the hot-spot temperature is now *computed*, not fit
+
+`gain_model.py` estimates the stagnation temperature with a single scaling,
+`T_hs = K · v_imp²`. **`coupled_gain.py`** removes that fit: it drives the repo's
+**1-D Lagrangian hydro** at an ablation pressure set by the laser energy and reads
+the *computed* hot-spot temperature straight off the converging shock.
+
+```bash
+python3 build_hydro_table.py   # one-time: run the hydro across drive pressures
+python3 coupled_gain.py        # fit T_hs(P_drive), evaluate gain
+```
+
+![coupled gain](coupled_gain.png)
+
+The hydro lands on **10.7 keV at NIF-scale drive with no temperature knob at all** —
+an independent confirmation of the energy ledger — and the coupled model still
+reproduces N221204 within ~3% (yield 3.23 MJ, gain 1.58). Only ρR stays calibrated:
+the lossless single-shock toy reaches ignition *temperature* but builds almost no
+areal density (ρR ~ 0.003 vs the ~1 g/cm² needed), so temperature — the ignition
+trigger — is what we take from it. Strong-shock heating makes `T_hs` linear in drive
+pressure, exactly as the sampled hydro points show.
+
+## Whole-design ML — laser + capsule + hohlraum → gain
+
+**`whole_design_ml.py`** optimizes the *entire* design against gain, not just
+hohlraum geometry. It chains the two forward models the repo now has —
+`coupled_gain` (laser + capsule → gain₀) and the view-factor → convergent-RT chain
+(hohlraum → YOC) — and learns a surrogate over the 8-D design space, with the same
+active-learning loop (propose surrogate optimum → verify against physics → refit).
+
+![whole-design ML](whole_design_ml.png)
+
+Two results worth calling out: **laser energy barely matters** (permutation
+importance ≈ 0) — above the ignition cliff, gain is set by capsule compression and
+drive symmetry, not by piling on more laser. And the optimizer rails convergence
+high / adiabat low / fuel high, because the reduced model rewards compression
+without charging for the Rayleigh–Taylor instability it costs — which is exactly the
+penalty **Step 3** (multimode RT + mix width + robustness) adds, turning "max gain"
+into "max *robust* gain."

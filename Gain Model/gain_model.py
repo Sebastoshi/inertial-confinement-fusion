@@ -186,6 +186,8 @@ if __name__ == "__main__":
 #   convergent models, drive symmetry from the hohlraum view factor, and yield
 #   degradation from the asymmetry model -- all feeding this single design -> gain
 #   forward model that the ML can then optimize end to end.
-# * Next: replace the stagnation scalings with the 1-D Lagrangian hydro so T_hs and
-#   rho*R are computed, not fit; add a real absorbed-fraction / rocket calc.
+# * Done next door: coupled_gain.py replaces the T_hs = K*v_imp^2 scaling with the
+#   hot-spot temperature COMPUTED by the 1-D Lagrangian hydro (still ~within 3% of
+#   NIF); whole_design_ml.py then optimizes laser + capsule + hohlraum -> gain.
+#   Still open: a hydro with a resolved ablation front so rho*R is computed too.
 # ----------------------------------------------------------------------------
