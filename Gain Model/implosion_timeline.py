@@ -72,6 +72,7 @@ PRESETS = {
     "NIF 2022 (first ignition, gain 1.5)": Design(2.05, 210.0, 35.0, 2.00, 21.0),
     "NIF 2025 (record, gain 4.1)":         Design(2.08, 225.0, 44.0, 1.70, 2.0),
     "Optimal (max gain, 7.6)":             Design(1.50, 260.0, 46.0, 1.70, 1.0, 0.0),
+    "ML optimum (robust, 5.9)":            Design(1.65, 260.0, 46.0, 2.15, 1.0, 0.0),
 }
 
 MIX_REF = mix.mix_penalty(35.0, 2.0, mix.SIGMA_SURF_REF)   # nominal mix penalty (~0.85)

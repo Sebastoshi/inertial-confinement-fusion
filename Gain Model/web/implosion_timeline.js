@@ -262,4 +262,5 @@ export const PRESETS = {
   "NIF 2022 (first ignition, gain 1.5)": { E_MJ: 2.05, fuel_ug: 210.0, CR: 35.0, adiabat: 2.0, surf_nm: 21.0, drive_asym_pct: 0 },
   "NIF 2025 (record, gain 4.1)": { E_MJ: 2.08, fuel_ug: 225.0, CR: 44.0, adiabat: 1.7, surf_nm: 2.0, drive_asym_pct: 0 },
   "Optimal (max gain, 7.6)": { E_MJ: 1.5, fuel_ug: 260.0, CR: 46.0, adiabat: 1.7, surf_nm: 1.0, drive_asym_pct: 0 },
+  "ML optimum (robust, 5.9)": { E_MJ: 1.65, fuel_ug: 260.0, CR: 46.0, adiabat: 2.15, surf_nm: 1.0, drive_asym_pct: 0 },
 };
