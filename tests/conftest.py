@@ -75,3 +75,8 @@ def crt_P0(crt):
 @pytest.fixture(scope="session")
 def dashboard():
     return _load("Gain Model", "dashboard.py", "dashboard")
+
+
+@pytest.fixture(scope="session")
+def timeline():
+    return _load("Gain Model", "implosion_timeline.py", "implosion_timeline")

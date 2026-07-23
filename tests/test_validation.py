@@ -156,3 +156,29 @@ class TestDashboard:
         r = dashboard.evaluate_design(2.05, 0.30, 45.0, 1.6, 4.0, 1.5, 0.50, 0.40)
         assert r["verdict"] == "QUENCHED"                           # mix kills the Step-2 corner
         assert r["effective_gain"] < 0.5
+
+
+# ----------------------------------------------------------------------------
+# Implosion timeline: the animatable model reproduces both NIF preset shots
+# ----------------------------------------------------------------------------
+class TestTimeline:
+    def test_presets_reproduce_real_gains(self, timeline):
+        sims = {n: timeline.simulate(d) for n, d in timeline.PRESETS.items()}
+        by = {n.split()[1]: s for n, s in sims.items()}            # "2022" / "2025"
+        assert by["2022"]["gain"] == pytest.approx(1.54, rel=0.15)  # first ignition
+        assert by["2022"]["yield_MJ"] == pytest.approx(3.15, rel=0.15)
+        assert by["2025"]["gain"] == pytest.approx(4.13, rel=0.15)  # record shot
+        assert by["2025"]["yield_MJ"] == pytest.approx(8.6, rel=0.15)
+        assert all(s["ignites"] and s["verdict"] == "IGNITES" for s in sims.values())
+
+    def test_time_series_are_animation_ready(self, timeline):
+        s = timeline.simulate(list(timeline.PRESETS.values())[0])
+        for k in ("t", "R", "T", "rhoR", "gain_t"):
+            assert len(s[k]) == len(s["t"]) and not np.isnan(s[k]).any()
+        assert s["R"][0] > s["R"].min() < s["R"][-1]                # shell converges then rebounds
+        assert np.all(np.diff(s["gain_t"]) >= -1e-9)               # gain only accumulates
+
+    def test_rough_aggressive_capsule_fizzles(self, timeline):
+        s = timeline.simulate(timeline.Design(2.05, 210.0, 45.0, 1.6, 60.0))
+        assert s["verdict"] == "QUENCHED"                          # rough + over-driven -> mix quench
+        assert s["gain"] < 0.5
