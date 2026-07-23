@@ -97,7 +97,8 @@
           <div class="slider"><label><span>DT fuel mass</span><b id="v-fuel">210 µg</b></label><input type="range" id="s-fuel" min="150" max="260" step="1" value="210"></div>
           <div class="slider"><label><span>convergence ratio</span><b id="v-CR">35</b></label><input type="range" id="s-CR" min="28" max="46" step="0.5" value="35"></div>
           <div class="slider"><label><span>in-flight adiabat <span class="tag">(lower = more compressible)</span></span><b id="v-ad">2.00</b></label><input type="range" id="s-ad" min="1.6" max="2.6" step="0.02" value="2.0"></div>
-          <div class="slider"><label><span>capsule surface finish <span class="tag">(smoother = less mix)</span></span><b id="v-surf">21 nm</b></label><input type="range" id="s-surf" min="1" max="60" step="1" value="21"></div>
+          <div class="slider"><label><span>capsule surface finish <span class="tag">(smoother = less high-mode RT mix)</span></span><b id="v-surf">21 nm</b></label><input type="range" id="s-surf" min="1" max="60" step="1" value="21"></div>
+          <div class="slider"><label><span>drive asymmetry P2 <span class="tag">(pressure-wave lopsidedness → low-mode RT)</span></span><b id="v-asym">0.0 %</b></label><input type="range" id="s-asym" min="0" max="6" step="0.1" value="0"></div>
         </div>
       </div>
 
@@ -120,11 +121,13 @@ import { simulate, PRESETS } from "./implosion_timeline.js";
 const R0 = 1.0e-3;
 const $ = (id) => document.getElementById(id);
 const state = { sim: null, frame: 0, playing: false, speed: 1.5, last: 0 };
+const curFrame = () => Math.min(Math.max(Math.round(state.frame), 0), state.sim.t.length - 1);
 
 // ---------- design <-> controls ----------
-const S = { E: $("s-E"), fuel: $("s-fuel"), CR: $("s-CR"), ad: $("s-ad"), surf: $("s-surf") };
+const S = { E: $("s-E"), fuel: $("s-fuel"), CR: $("s-CR"), ad: $("s-ad"), surf: $("s-surf"), asym: $("s-asym") };
 function design() {
-  return { E_MJ: +S.E.value, fuel_ug: +S.fuel.value, CR: +S.CR.value, adiabat: +S.ad.value, surf_nm: +S.surf.value };
+  return { E_MJ: +S.E.value, fuel_ug: +S.fuel.value, CR: +S.CR.value, adiabat: +S.ad.value,
+    surf_nm: +S.surf.value, drive_asym_pct: +S.asym.value };
 }
 function syncLabels() {
   $("v-E").textContent = (+S.E.value).toFixed(2) + " MJ";
@@ -132,6 +135,7 @@ function syncLabels() {
   $("v-CR").textContent = (+S.CR.value).toFixed(1);
   $("v-ad").textContent = (+S.ad.value).toFixed(2);
   $("v-surf").textContent = S.surf.value + " nm";
+  $("v-asym").textContent = (+S.asym.value).toFixed(1) + " %";
 }
 
 // ---------- temperature colour ramp (keV -> colour) ----------
@@ -156,7 +160,7 @@ function fit(cv, h) {
 // ---------- the capsule cross-section ----------
 function drawStage() {
   const cv = $("stage"); const { ctx, w, h } = fit(cv);
-  const s = state.sim, i = state.frame;
+  const s = state.sim, i = curFrame();
   ctx.clearRect(0, 0, w, h);
   const cx = w / 2, cy = h / 2, maxR = Math.min(w, h) * 0.44;
   const scale = maxR / R0;
@@ -168,9 +172,10 @@ function drawStage() {
   ctx.strokeStyle = "rgba(120,140,170,0.18)"; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(cx, cy, R0 * scale, 0, 7); ctx.stroke();
 
-  // RT mix distortion: rough / over-driven capsules break up near stagnation
+  // high-mode RT spikes (surface finish -> mix) + low-mode P2 distortion (drive asymmetry)
   const rough = (1 - s.mix_penalty) * comp;
   const lobes = 12, amp = rpx * 0.42 * rough;
+  const a2 = (s.drive_asym_pct || 0) / 100, p2 = Math.min(a2 * 16 * comp, 0.62);
 
   // glowing hot core (radial gradient by temperature)
   const glowR = Math.max(rpx * 1.5, rpx + T * 0.4);
@@ -182,9 +187,10 @@ function drawStage() {
 
   // the shell / fuel boundary (perturbed if mixing)
   ctx.beginPath();
-  for (let k = 0; k <= 90; k++) {
-    const th = (k / 90) * Math.PI * 2;
-    const rr = rpx + amp * Math.sin(lobes * th + 0.6);
+  for (let k = 0; k <= 120; k++) {
+    const th = (k / 120) * Math.PI * 2;
+    const P2 = (3 * Math.sin(th) ** 2 - 1) / 2;                 // Legendre l=2: poles bulge, waist pinches
+    const rr = rpx * (1 + p2 * P2) + amp * Math.sin(lobes * th + 0.6);
     const px = cx + rr * Math.cos(th), py = cy + rr * Math.sin(th);
     k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
@@ -225,7 +231,7 @@ function drawSpark(id, xs, ys, i, color, opts = {}) {
 
 // ---------- metrics + verdict ----------
 function drawMetrics() {
-  const s = state.sim, i = state.frame;
+  const s = state.sim, i = curFrame();
   const vcol = { IGNITES: "var(--green)", MARGINAL: "var(--gold)", QUENCHED: "var(--accent)" }[s.verdict];
   const vd = $("verdict"); vd.textContent = s.verdict; vd.style.color = vcol;
   $("clock").textContent = (s.t[i] * 1e9).toFixed(2) + " ns";
@@ -241,7 +247,7 @@ function drawMetrics() {
 }
 
 function render() {
-  const s = state.sim, i = state.frame;
+  const s = state.sim, i = curFrame();
   drawStage();
   drawSpark("p-R", s.t, s.R.map((v) => v * 1e6), i, "rgba(74,163,255,1)");
   drawSpark("p-T", s.t, s.T, i, "rgba(255,90,60,1)", { log: true, floor: 0.01 });
@@ -284,7 +290,8 @@ $("speed").addEventListener("input", (e) => { state.speed = +e.target.value; $("
 document.querySelectorAll("[data-preset]").forEach((btn) =>
   btn.addEventListener("click", () => {
     const d = PRESETS[btn.dataset.preset];
-    S.E.value = d.E_MJ; S.fuel.value = d.fuel_ug; S.CR.value = d.CR; S.ad.value = d.adiabat; S.surf.value = d.surf_nm;
+    S.E.value = d.E_MJ; S.fuel.value = d.fuel_ug; S.CR.value = d.CR; S.ad.value = d.adiabat;
+    S.surf.value = d.surf_nm; S.asym.value = d.drive_asym_pct || 0;
     syncLabels(); recompute(true); setPlaying(true);
   })
 );

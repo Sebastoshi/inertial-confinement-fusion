@@ -157,6 +157,12 @@ const mixPenalty = (cr, ad, sigma = SIGMA_SURF_REF) =>
 const MIX_REF = mixPenalty(35.0, 2.0, SIGMA_SURF_REF);
 const mixFactor = (d) => Math.min(mixPenalty(d.CR, d.adiabat, d.surf_nm * 1e-9) / MIX_REF, 1.0 / MIX_REF);
 
+// P2 drive (pressure-wave) asymmetry -> yield-over-clean. A low-mode l=2 perturbation
+// amplified by convergence + deceleration RT into a peanut hot spot; the ignition cliff
+// from Rayleigh-Taylor/hohlraum_asymmetry.py (1% -> ~0.72, 2% -> ~0.35, 5% -> ~0.02).
+const ASYM_A0 = 0.016, ASYM_N = 2.3;
+const asymYoc = (pct) => 1.0 / (1.0 + Math.pow(Math.max(pct, 0) / 100 / ASYM_A0, ASYM_N));
+
 // ---- implosion trajectory R(t): coast + decelerate on a gas cushion tuned to CR ----
 const implosionVelocity = (E_MJ) => V_IMP_NIF * Math.sqrt(E_MJ / 2.05);
 
@@ -197,9 +203,10 @@ export function simulate(d, npts = 600) {
   const rhoR_stag = RHOR_REF * (d.CR / CR_REF) ** 2 * (ALPHA_REF / d.adiabat);
   const rho_stag = RHO_HS;
   const mix_pen = mixPenalty(d.CR, d.adiabat, d.surf_nm * 1e-9);
-  const rhoR_eff = rhoR_stag * Math.max(Math.pow(mix_pen, 0.3), 0.05);
+  const asym = asymYoc(d.drive_asym_pct || 0);                       // P2 (low-mode) YOC
+  const rhoR_eff = rhoR_stag * Math.max(Math.pow(mix_pen * asym, 0.3), 0.03);
 
-  const gain = evaluateGain(E_J, d.fuel_ug * 1e-9, d.CR, d.adiabat).gain * mixFactor(d);
+  const gain = evaluateGain(E_J, d.fuel_ug * 1e-9, d.CR, d.adiabat).gain * mixFactor(d) * asym;
   const yield_J = gain * E_J;
 
   const tr = trajectory(v_imp, d.CR);
@@ -240,11 +247,13 @@ export function simulate(d, npts = 600) {
     }
   }
 
-  const verdict = mix_pen < 0.25 ? "QUENCHED" : ignites && gain >= 1.0 ? "IGNITES" : "MARGINAL";
+  const clean = mix_pen * asym;
+  const verdict = clean < 0.25 ? "QUENCHED" : ignites && gain >= 1.0 ? "IGNITES" : "MARGINAL";
   return {
     t, R, T, rho, rhoR, gain_t,
     t_stag, R_min, T_stag, T_peak: amax(T), rhoR_stag,
-    mix_penalty: mix_pen, burnup: b.burnup, gain, yield_MJ: yield_J / 1e6,
+    mix_penalty: mix_pen, asym_yoc: asym, drive_asym_pct: d.drive_asym_pct || 0,
+    burnup: b.burnup, gain, yield_MJ: yield_J / 1e6,
     ignites, verdict, v_imp, tau_c: b.tau_c,
   };
 }

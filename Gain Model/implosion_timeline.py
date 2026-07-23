@@ -61,7 +61,8 @@ class Design:
     fuel_ug: float     # DT fuel mass [micrograms]  (NIF ~ 210 ug = 0.21e-6 kg)
     CR: float          # convergence ratio R0/R_min
     adiabat: float     # in-flight adiabat
-    surf_nm: float     # capsule surface finish (RMS) [nm]
+    surf_nm: float     # capsule surface finish (RMS) [nm]  -- HIGH-mode RT seed (mix)
+    drive_asym_pct: float = 0.0   # P2 drive (pressure-wave) asymmetry [%] -- LOW-mode RT
 
 
 # preset shots -- capsule knobs chosen so the coupled physics reproduces the real gains
@@ -76,6 +77,19 @@ MIX_REF = mix.mix_penalty(35.0, 2.0, mix.SIGMA_SURF_REF)   # nominal mix penalty
 def mix_factor(d):
     """Mix penalty relative to the NIF-like nominal (as in robust_design_ml)."""
     return min(mix.mix_penalty(d.CR, d.adiabat, d.surf_nm * 1e-9) / MIX_REF, 1.0 / MIX_REF)
+
+
+# P2 drive (pressure-wave) asymmetry -> yield-over-clean. Low-mode drive asymmetry
+# seeds an l=2 perturbation that spherical convergence + deceleration RT amplify into a
+# peanut-shaped hot spot, degrading yield. Calibrated to Rayleigh-Taylor/hohlraum_asymmetry.py:
+# 1% P2 -> YOC ~0.72, 2% -> ~0.35, 5% -> ~0.02 (the ignition cliff, not a fitted curve).
+ASYM_A0, ASYM_N = 0.016, 2.3
+
+
+def asym_yoc(drive_asym_pct):
+    """Yield-over-clean for a given P2 drive asymmetry [%] (1.0 = perfectly symmetric)."""
+    a2 = max(drive_asym_pct, 0.0) / 100.0
+    return 1.0 / (1.0 + (a2 / ASYM_A0) ** ASYM_N)
 
 
 def implosion_velocity(E_MJ):
@@ -136,10 +150,12 @@ def simulate(d, npts=600):
     rhoR_stag = gm.RHOR_REF * (d.CR / gm.CR_REF) ** 2 * (gm.ALPHA_REF / d.adiabat)  # g/cm^2
     rho_stag = gm.RHO_HS                                                # g/cc
     mix_pen = mix.mix_penalty(d.CR, d.adiabat, d.surf_nm * 1e-9)        # yield multiplier
-    rhoR_eff = rhoR_stag * max(mix_pen ** 0.3, 0.05)                    # mix thins the burning core
+    asym = asym_yoc(getattr(d, "drive_asym_pct", 0.0))                  # P2 (low-mode) YOC
+    # both instabilities thin the confining hot spot -> a smaller burning core
+    rhoR_eff = rhoR_stag * max((mix_pen * asym) ** 0.3, 0.03)
 
-    # --- scalar gain: the SAME validated pipeline as robust_design_ml (coupled x mix) ---
-    gain = cg.evaluate(cg.Design(E_J, d.fuel_ug * 1e-9, d.CR, d.adiabat))["gain"] * mix_factor(d)
+    # --- scalar gain: the validated pipeline (coupled x mix) x drive-asymmetry YOC ---
+    gain = cg.evaluate(cg.Design(E_J, d.fuel_ug * 1e-9, d.CR, d.adiabat))["gain"] * mix_factor(d) * asym
     yield_J = gain * E_J
 
     # --- implosion trajectory R(t) ---
@@ -182,11 +198,13 @@ def simulate(d, npts=600):
     # post-burn disassembly: expansion cooling as the shell rebounds
     T[after] = max(b["T"][-1], T_stag) * np.clip(R_min / np.maximum(R[after], 1e-12), 0.0, 1.0) ** 2
 
-    verdict = "QUENCHED" if mix_pen < 0.25 else ("IGNITES" if ignites and gain >= 1.0 else "MARGINAL")
+    clean = mix_pen * asym                                             # combined RT survival
+    verdict = "QUENCHED" if clean < 0.25 else ("IGNITES" if ignites and gain >= 1.0 else "MARGINAL")
     return dict(
         t=t, R=R, T=T, rho=rho, rhoR=rhoR, gain_t=gain_t,
         t_stag=t_stag, R_min=R_min, T_stag=T_stag, T_peak=float(T.max()),
-        rhoR_stag=rhoR_stag, mix_penalty=mix_pen, burnup=burnup,
+        rhoR_stag=rhoR_stag, mix_penalty=mix_pen, asym_yoc=asym,
+        drive_asym_pct=float(getattr(d, "drive_asym_pct", 0.0)), burnup=burnup,
         gain=gain, yield_MJ=yield_J / 1e6, ignites=bool(ignites), verdict=verdict,
         v_imp=v_imp, tau_c=tau_c,
     )

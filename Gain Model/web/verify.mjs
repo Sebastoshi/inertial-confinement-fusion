@@ -10,8 +10,8 @@ let worstScalar = 0, worstArray = 0, fail = false;
 const SCALAR_TOL = 0.05, ARRAY_TOL = 0.06;
 
 for (const c of ref.cases) {
-  const [E_MJ, fuel_ug, CR, adiabat, surf_nm] = c.design;
-  const s = simulate({ E_MJ, fuel_ug, CR, adiabat, surf_nm });
+  const [E_MJ, fuel_ug, CR, adiabat, surf_nm, drive_asym_pct = 0] = c.design;
+  const s = simulate({ E_MJ, fuel_ug, CR, adiabat, surf_nm, drive_asym_pct });
 
   let cs = 0;
   for (const [k, v] of Object.entries(c.scalars)) {
