@@ -264,3 +264,36 @@ export const PRESETS = {
   "Optimal (max gain, 7.6)": { E_MJ: 1.5, fuel_ug: 260.0, CR: 46.0, adiabat: 1.7, surf_nm: 1.0, drive_asym_pct: 0 },
   "ML optimum (robust, 5.9)": { E_MJ: 1.65, fuel_ug: 260.0, CR: 46.0, adiabat: 2.15, surf_nm: 1.0, drive_asym_pct: 0 },
 };
+
+// ---- ablator tungsten doping: profile grading g in [0,1] -> (adiabat, CR, surface) ----
+// Port of ablator_doping.py. g = 0 is a discrete step layer (NIF 2022), g = 1 the
+// continuous gradient (NIF 2025). Grading buries more W (preheat shielding -> adiabat)
+// and softens the ablation front (RT stabilization -> mix + higher convergence).
+const DOP = { C_PEAK: 0.44, RHO_HDC: 3.5, A_W: 183.84, A_C: 12.011, X0: 14.0 };
+const _dopMassfrac = (c) => { const f = c / 100; return (f * DOP.A_W) / (f * DOP.A_W + (1 - f) * DOP.A_C); };
+function _dopProfile(x, g) {
+  const hw = 3.0 * (1.0 + 1.6 * g), n = 8.0 * (1.0 - g) + 1.0 * g;
+  return DOP.C_PEAK * Math.exp(-Math.pow(Math.abs((x - DOP.X0) / hw), 2.0 * n));
+}
+function _dopProps(g) {
+  const N = 3000, dx = 30.0 / (N - 1), dxcm = dx * 1e-4;
+  const rho = new Array(N), rhow = new Array(N);
+  for (let i = 0; i < N; i++) { const mw = DOP.RHO_HDC * _dopMassfrac(_dopProfile(i * dx, g)); rhow[i] = mw; rho[i] = DOP.RHO_HDC + mw; }
+  let sigma = 0; for (let i = 0; i < N - 1; i++) sigma += 0.5 * (rhow[i] + rhow[i + 1]) * dxcm;
+  let maxAbs = 0, rhoMax = 0;
+  for (let i = 0; i < N; i++) {
+    if (rho[i] > rhoMax) rhoMax = rho[i];
+    const d = i === 0 ? (rho[1] - rho[0]) / dxcm : i === N - 1 ? (rho[N - 1] - rho[N - 2]) / dxcm : (rho[i + 1] - rho[i - 1]) / (2 * dxcm);
+    if (Math.abs(d) > maxAbs) maxAbs = Math.abs(d);
+  }
+  return [sigma, (rhoMax / (maxAbs + 1e-30)) * 1e4];
+}
+const [_dsW0, _dL0] = _dopProps(0.0), [_dsW1, _dL1] = _dopProps(1.0);
+const _da1 = (2.0 - 1.7) / (_dsW1 - _dsW0), _da0 = 2.0 + _da1 * _dsW0;         // adiabat falls with W column
+const _ds1 = (Math.log(2.0) - Math.log(21.0)) / (_dL1 - _dL0), _ds0 = Math.log(21.0) - _ds1 * _dL0;  // mix falls with L
+const _dc1 = (44.0 - 35.0) / (_dL1 - _dL0), _dc0 = 35.0 - _dc1 * _dL0;         // CR rises with stability
+
+export function dopantDesign(g) {
+  const [sW, L] = _dopProps(g);
+  return { adiabat: _da0 - _da1 * sW, CR: _dc0 + _dc1 * L, surf_nm: Math.exp(_ds0 + _ds1 * L) };
+}

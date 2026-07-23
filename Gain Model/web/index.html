@@ -45,6 +45,10 @@
   .slider label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
   .slider label span { color: var(--dim); }
   .slider label b { font-variant-numeric: tabular-nums; }
+  .dopant { border: 1px solid var(--accent); background: rgba(255,90,60,0.09); border-radius: 10px; padding: 9px 11px 7px; }
+  .dopant label em { color: var(--accent); font-style: normal; font-weight: 600; }
+  .dopant label b { color: var(--accent); }
+  .dop-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); margin-top: 3px; }
   .foot { color: var(--dim); font-size: 12px; margin-top: 22px; line-height: 1.6; }
   .tag { font-size: 11px; color: var(--dim); }
 </style>
@@ -95,6 +99,7 @@
         </div>
 
         <div class="sliders">
+          <div class="slider dopant"><label><span>ablator doping <em>— the 2025 breakthrough</em></span><b id="v-dop">step layer</b></label><input type="range" id="s-dop" min="0" max="1" step="0.01" value="0"><div class="dop-ends"><span>◄ tungsten step layer</span><span>continuous gradient ►</span></div></div>
           <div class="slider"><label><span>laser energy</span><b id="v-E">2.05 MJ</b></label><input type="range" id="s-E" min="1.5" max="2.4" step="0.01" value="2.05"></div>
           <div class="slider"><label><span>DT fuel mass</span><b id="v-fuel">210 µg</b></label><input type="range" id="s-fuel" min="150" max="260" step="1" value="210"></div>
           <div class="slider"><label><span>convergence ratio</span><b id="v-CR">35</b></label><input type="range" id="s-CR" min="28" max="46" step="0.5" value="35"></div>
@@ -118,7 +123,7 @@
 </div>
 
 <script type="module">
-import { simulate, PRESETS } from "./implosion_timeline.js";
+import { simulate, PRESETS, dopantDesign } from "./implosion_timeline.js";
 
 const R0 = 1.0e-3;
 const $ = (id) => document.getElementById(id);
@@ -287,6 +292,20 @@ function setPlaying(p) {
 }
 
 // ---------- wire up ----------
+// ablator doping slider: grades the tungsten profile, driving adiabat + CR + surface together
+const dopant = $("s-dop");
+const dopLabel = (g) => (g < 0.12 ? "step layer" : g > 0.88 ? "gradient" : Math.round(g * 100) + "% graded");
+function applyDopant() {
+  const g = +dopant.value, d = dopantDesign(g);
+  S.ad.value = (Math.round(d.adiabat / 0.02) * 0.02).toFixed(2);
+  S.CR.value = (Math.round(d.CR / 0.5) * 0.5).toFixed(1);
+  S.surf.value = String(Math.max(1, Math.round(d.surf_nm)));
+  $("v-dop").textContent = dopLabel(g);
+  syncLabels(); recompute(true);
+}
+dopant.addEventListener("input", applyDopant);
+[S.CR, S.ad, S.surf].forEach((el) => el.addEventListener("input", () => { $("v-dop").textContent = "custom"; }));
+
 Object.values(S).forEach((el) => el.addEventListener("input", () => { syncLabels(); recompute(true); }));
 $("play").addEventListener("click", () => setPlaying(!state.playing));
 $("restart").addEventListener("click", () => { state.frame = 0; setPlaying(false); render(); });
@@ -294,9 +313,11 @@ $("scrub").addEventListener("input", (e) => { setPlaying(false); state.frame = +
 $("speed").addEventListener("input", (e) => { state.speed = +e.target.value; $("speedval").textContent = (+e.target.value).toFixed(2).replace(/0$/, "") + "×"; });
 document.querySelectorAll("[data-preset]").forEach((btn) =>
   btn.addEventListener("click", () => {
-    const d = PRESETS[btn.dataset.preset];
+    const key = btn.dataset.preset, d = PRESETS[key];
     S.E.value = d.E_MJ; S.fuel.value = d.fuel_ug; S.CR.value = d.CR; S.ad.value = d.adiabat;
     S.surf.value = d.surf_nm; S.asym.value = d.drive_asym_pct || 0;
+    dopant.value = key.includes("2022") ? "0" : key.includes("2025") ? "1" : dopant.value;
+    $("v-dop").textContent = key.includes("2022") ? "step layer" : key.includes("2025") ? "gradient" : "custom";
     syncLabels(); recompute(true); setPlaying(true);
   })
 );
