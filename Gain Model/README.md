@@ -213,3 +213,26 @@ the same test suite. That closes the five-step arc: a fast, transparent, NIF-anc
 `design → gain` model — hot-spot temperature computed by the hydro, compression charged
 for its RT mix, optimized end-to-end for *robust* gain, its tolerances ranked into
 specs, and every claim held in place by CI.
+
+## Ablator doping — the real innovation behind the 2025 record
+
+**`ablator_doping.py`** models the capsule change that separated NIF's two records: a
+**continuous tungsten gradient** in the high-density-carbon ablator instead of a
+discrete **step layer** ("a dimmer switch instead of an on/off switch"). It closes the
+causal chain the rest of the repo leaves implicit — turning the two NIF presets from
+"here are two designs" into "here is the innovation that separated them."
+
+```bash
+python3 ablator_doping.py
+```
+
+![ablator doping](ablator_doping.png)
+
+The dopant profile → its **W column density** (M-band X-ray shielding → preheat →
+**adiabat**) and its **density-gradient scale length** (ablative-RT stabilization →
+**mix**, and the convergence it enables) → the coupled gain model. Grading buries ~2×
+the tungsten without a hydro penalty and softens the steepest edge ~18×, so the
+adiabat drops 2.0 → 1.7, the effective mix seed drops 21 → 2 nm, and convergence rises
+35 → 44 — and the gain climbs **1.6 → 4.0**, the step-vs-gradient jump. Reduced and
+pinned to the two shots (like every other calibration here); a first-principles version
+is a multigroup-radiation-transport / rad-hydro problem, noted in the `NOTES`.

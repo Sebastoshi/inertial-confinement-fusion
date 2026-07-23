@@ -182,3 +182,23 @@ class TestTimeline:
         s = timeline.simulate(timeline.Design(2.05, 210.0, 45.0, 1.6, 60.0))
         assert s["verdict"] == "QUENCHED"                          # rough + over-driven -> mix quench
         assert s["gain"] < 0.5
+
+
+# ----------------------------------------------------------------------------
+# Ablator tungsten doping: graded profile reproduces the NIF gain jump
+# ----------------------------------------------------------------------------
+class TestAblatorDoping:
+    def test_gradient_unlocks_the_gain_jump(self, ablator):
+        step, grad = ablator.evaluate(0.0), ablator.evaluate(1.0)
+        assert step["gain"] == pytest.approx(1.5, abs=0.4)         # step layer ~ NIF 2022
+        assert grad["gain"] == pytest.approx(4.1, abs=0.6)         # gradient ~ NIF 2025 record
+        assert grad["gain"] > 2 * step["gain"]
+        # grading buries more W, softens the front: lower adiabat + mix, higher convergence
+        assert grad["sigma_W"] > step["sigma_W"]
+        assert grad["L"] > step["L"]
+        assert grad["adiabat"] < step["adiabat"] and grad["surf_nm"] < step["surf_nm"]
+        assert grad["CR"] > step["CR"]
+
+    def test_gain_monotonic_in_grading(self, ablator):
+        gs = [ablator.evaluate(g)["gain"] for g in (0.0, 0.25, 0.5, 0.75, 1.0)]
+        assert all(b >= a - 1e-9 for a, b in zip(gs, gs[1:]))

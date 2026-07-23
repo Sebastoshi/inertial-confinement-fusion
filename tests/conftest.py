@@ -80,3 +80,8 @@ def dashboard():
 @pytest.fixture(scope="session")
 def timeline():
     return _load("Gain Model", "implosion_timeline.py", "implosion_timeline")
+
+
+@pytest.fixture(scope="session")
+def ablator():
+    return _load("Gain Model", "ablator_doping.py", "ablator_doping")
