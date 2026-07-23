@@ -175,22 +175,25 @@ function drawStage() {
   // high-mode RT spikes (surface finish -> mix) + low-mode P2 distortion (drive asymmetry)
   const rough = (1 - s.mix_penalty) * comp;
   const lobes = 12, amp = rpx * 0.42 * rough;
-  const a2 = (s.drive_asym_pct || 0) / 100, p2 = Math.min(a2 * 16 * comp, 0.62);
+  const a2 = (s.drive_asym_pct || 0) / 100, p2 = Math.min(a2 * 34 * comp, 1.05);
 
-  // glowing hot core (radial gradient by temperature)
+  // glowing hot core — elongated along the asymmetry axis so the hot spot itself deforms
   const glowR = Math.max(rpx * 1.5, rpx + T * 0.4);
-  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 1 + 0.7 * p2);
+  const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
   grd.addColorStop(0, tColor(T, 0.95));
   grd.addColorStop(0.5, tColor(T * 0.5, 0.5));
   grd.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx, cy, glowR, 0, 7); ctx.fill();
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(0, 0, glowR, 0, 7); ctx.fill(); ctx.restore();
 
-  // the shell / fuel boundary (perturbed if mixing)
+  // the shell / fuel boundary: high-mode spikes (mix) + low-mode peanut (drive asymmetry)
   ctx.beginPath();
-  for (let k = 0; k <= 120; k++) {
-    const th = (k / 120) * Math.PI * 2;
-    const P2 = (3 * Math.sin(th) ** 2 - 1) / 2;                 // Legendre l=2: poles bulge, waist pinches
-    const rr = rpx * (1 + p2 * P2) + amp * Math.sin(lobes * th + 0.6);
+  for (let k = 0; k <= 160; k++) {
+    const th = (k / 160) * Math.PI * 2;
+    const c = Math.sin(th);                                     // cos(polar angle from the drive axis)
+    const P2 = (3 * c * c - 1) / 2;                            // l=2: poles bulge, waist pinches
+    const P4 = (35 * c ** 4 - 30 * c * c + 3) / 8;             // l=4: deepens the waist into a peanut
+    const rr = Math.max(rpx * (1 + p2 * P2 - 0.28 * p2 * P4) + amp * Math.sin(lobes * th + 0.6), 0.5);
     const px = cx + rr * Math.cos(th), py = cy + rr * Math.sin(th);
     k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
