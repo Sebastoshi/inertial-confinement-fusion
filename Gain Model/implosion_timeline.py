@@ -65,10 +65,13 @@ class Design:
     drive_asym_pct: float = 0.0   # P2 drive (pressure-wave) asymmetry [%] -- LOW-mode RT
 
 
-# preset shots -- capsule knobs chosen so the coupled physics reproduces the real gains
+# preset shots -- capsule knobs chosen so the coupled physics reproduces the real gains.
+# "Optimal" is the max-gain design over the explorer's slider ranges: least laser (gain
+# = yield/laser), most fuel, highest convergence, smoothest capsule, no asymmetry.
 PRESETS = {
     "NIF 2022 (first ignition, gain 1.5)": Design(2.05, 210.0, 35.0, 2.00, 21.0),
     "NIF 2025 (record, gain 4.1)":         Design(2.08, 225.0, 44.0, 1.70, 2.0),
+    "Optimal (max gain, 7.6)":             Design(1.50, 260.0, 46.0, 1.70, 1.0, 0.0),
 }
 
 MIX_REF = mix.mix_penalty(35.0, 2.0, mix.SIGMA_SURF_REF)   # nominal mix penalty (~0.85)
