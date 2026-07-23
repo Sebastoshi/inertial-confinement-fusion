@@ -155,8 +155,15 @@ def simulate(d, npts=600):
     ignites = b["T"].max() > 1.6 * T_stag                              # clear thermal runaway
 
     # --- assemble a single timeline: compression -> burn spike -> disassembly ---
+    # non-uniform grid: dense through stagnation + the (tens-of-ps) burn so the
+    # ignition spike is resolved; index-based playback then slows down there for free.
     t_end = t_tr[-1] + tau_c
-    t = np.linspace(0.0, t_end, npts)
+    n1, n2 = int(npts * 0.47), int(npts * 0.36)
+    n3 = npts - n1 - n2
+    pre = np.linspace(0.0, t_stag, n1, endpoint=False)          # coast (0 .. <t_stag)
+    mid = np.linspace(t_stag, t_stag + tau_c, n2)               # stagnation + burn (dense)
+    post = np.linspace(t_stag + tau_c, t_end, n3 + 1)[1:]       # disassembly
+    t = np.concatenate([pre, mid, post])
     R = np.interp(t, t_tr, R_tr)
     comp = np.clip(R_min / np.maximum(R, 1e-12), 0.0, 1.0)              # 0 (start) -> 1 (stagnation)
     T = T_stag * comp ** 2                                              # adiabatic compression heating

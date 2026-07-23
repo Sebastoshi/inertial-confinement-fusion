@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ICF implosion explorer</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #131824; --line: #263145; --ink: #e6ecf5; --dim: #8b98ad;
+    --accent: #ff5a3c; --cool: #4aa3ff; --gold: #ffce54; --green: #35d07f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 26px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); margin: 0 0 22px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: 400px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  canvas { display: block; width: 100%; }
+  #stage { aspect-ratio: 1; border-radius: 12px; background: radial-gradient(circle at 50% 50%, #0d1220, #070a10); }
+  .verdict { display: flex; align-items: baseline; justify-content: space-between; margin: 12px 2px 2px; }
+  .verdict b { font-size: 18px; letter-spacing: 0.02em; }
+  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 14px; margin-top: 12px; }
+  .metric { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .metric span { color: var(--dim); }
+  .metric b { font-weight: 600; }
+  .plots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 4px; }
+  .plot h4 { margin: 0 0 4px; font-size: 12px; color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .plot .val { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+  .controls { display: flex; align-items: center; gap: 10px; margin: 16px 0 6px; flex-wrap: wrap; }
+  button { font: inherit; color: var(--ink); background: #1c2333; border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 13px; cursor: pointer; transition: background .15s, border-color .15s; }
+  button:hover { background: #232c40; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .presets button { border-color: #34405a; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  #scrub { flex: 1; min-width: 140px; }
+  .sliders { display: grid; gap: 11px; margin-top: 14px; }
+  .slider label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
+  .slider label span { color: var(--dim); }
+  .slider label b { font-variant-numeric: tabular-nums; }
+  .foot { color: var(--dim); font-size: 12px; margin-top: 22px; line-height: 1.6; }
+  .tag { font-size: 11px; color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Inertial-confinement-fusion implosion explorer</h1>
+  <p class="sub">Set the laser and capsule, then watch the shell implode, stagnate, and ignite — or fizzle. Reduced, NIF-anchored physics running live in your browser.</p>
+
+  <div class="grid">
+    <!-- left: the implosion -->
+    <div>
+      <div class="card">
+        <canvas id="stage"></canvas>
+        <div class="verdict">
+          <b id="verdict">—</b>
+          <span class="tag" id="clock"></span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>target gain</span><b id="m-gain">—</b></div>
+          <div class="metric"><span>fusion yield</span><b id="m-yield">—</b></div>
+          <div class="metric"><span>hot-spot T</span><b id="m-T">—</b></div>
+          <div class="metric"><span>areal density ρR</span><b id="m-rhoR">—</b></div>
+          <div class="metric"><span>convergence</span><b id="m-cr">—</b></div>
+          <div class="metric"><span>clean fraction (mix)</span><b id="m-mix">—</b></div>
+        </div>
+      </div>
+      <div class="presets" style="margin-top:12px">
+        <button data-preset="NIF 2022 (first ignition, gain 1.5)">▶ NIF 2022 — gain 1.5</button>
+        <button data-preset="NIF 2025 (record, gain 4.1)">▶ NIF 2025 — gain 4.1</button>
+      </div>
+    </div>
+
+    <!-- right: controls + plots -->
+    <div>
+      <div class="card">
+        <div class="controls">
+          <button id="play" class="primary">▶ Play</button>
+          <button id="restart">↺ Restart</button>
+          <input type="range" id="scrub" min="0" max="599" value="0" />
+        </div>
+        <div class="controls" style="margin-top:2px">
+          <span class="tag">speed</span>
+          <input type="range" id="speed" min="0.25" max="4" step="0.25" value="1.5" style="max-width:160px" />
+          <span class="tag" id="speedval">1.5×</span>
+        </div>
+
+        <div class="sliders">
+          <div class="slider"><label><span>laser energy</span><b id="v-E">2.05 MJ</b></label><input type="range" id="s-E" min="1.5" max="2.4" step="0.01" value="2.05"></div>
+          <div class="slider"><label><span>DT fuel mass</span><b id="v-fuel">210 µg</b></label><input type="range" id="s-fuel" min="150" max="260" step="1" value="210"></div>
+          <div class="slider"><label><span>convergence ratio</span><b id="v-CR">35</b></label><input type="range" id="s-CR" min="28" max="46" step="0.5" value="35"></div>
+          <div class="slider"><label><span>in-flight adiabat <span class="tag">(lower = more compressible)</span></span><b id="v-ad">2.00</b></label><input type="range" id="s-ad" min="1.6" max="2.6" step="0.02" value="2.0"></div>
+          <div class="slider"><label><span>capsule surface finish <span class="tag">(smoother = less mix)</span></span><b id="v-surf">21 nm</b></label><input type="range" id="s-surf" min="1" max="60" step="1" value="21"></div>
+        </div>
+      </div>
+
+      <div class="plots" style="margin-top:14px">
+        <div class="card plot"><h4>shell radius</h4><div class="val" id="pv-R">—</div><canvas class="spark" id="p-R"></canvas></div>
+        <div class="card plot"><h4>hot-spot T</h4><div class="val" id="pv-T">—</div><canvas class="spark" id="p-T"></canvas></div>
+        <div class="card plot"><h4>cumulative gain</h4><div class="val" id="pv-G">—</div><canvas class="spark" id="p-G"></canvas></div>
+      </div>
+
+      <p class="foot">
+        The two presets are real NIF shots at nearly the same laser energy — the jump from gain 1.5 to 4.1 comes from a <b>better capsule</b> (higher convergence, far smoother surface), not more laser. Push convergence up or roughen the surface and the Rayleigh–Taylor mix quenches the hot spot. Reduced, calibrated toy physics — not a radiation-hydrodynamics code.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { simulate, PRESETS } from "./implosion_timeline.js";
+
+const R0 = 1.0e-3;
+const $ = (id) => document.getElementById(id);
+const state = { sim: null, frame: 0, playing: false, speed: 1.5, last: 0 };
+
+// ---------- design <-> controls ----------
+const S = { E: $("s-E"), fuel: $("s-fuel"), CR: $("s-CR"), ad: $("s-ad"), surf: $("s-surf") };
+function design() {
+  return { E_MJ: +S.E.value, fuel_ug: +S.fuel.value, CR: +S.CR.value, adiabat: +S.ad.value, surf_nm: +S.surf.value };
+}
+function syncLabels() {
+  $("v-E").textContent = (+S.E.value).toFixed(2) + " MJ";
+  $("v-fuel").textContent = S.fuel.value + " µg";
+  $("v-CR").textContent = (+S.CR.value).toFixed(1);
+  $("v-ad").textContent = (+S.ad.value).toFixed(2);
+  $("v-surf").textContent = S.surf.value + " nm";
+}
+
+// ---------- temperature colour ramp (keV -> colour) ----------
+function tColor(T, a = 1) {
+  const x = Math.max(0, Math.min(1, Math.log10(Math.max(T, 0.02) / 0.02) / Math.log10(80 / 0.02)));
+  const stops = [[12,16,44],[36,70,170],[150,46,150],[240,120,34],[255,205,96],[255,255,255]];
+  const seg = x * (stops.length - 1), i = Math.min(Math.floor(seg), stops.length - 2), f = seg - i;
+  const c = stops[i], d = stops[i + 1];
+  const r = Math.round(c[0]+(d[0]-c[0])*f), g = Math.round(c[1]+(d[1]-c[1])*f), b = Math.round(c[2]+(d[2]-c[2])*f);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ---------- crisp canvas ----------
+function fit(cv, h) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth;
+  cv.width = Math.round(w * dpr); cv.height = Math.round((h || w) * dpr);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h: h || w };
+}
+
+// ---------- the capsule cross-section ----------
+function drawStage() {
+  const cv = $("stage"); const { ctx, w, h } = fit(cv);
+  const s = state.sim, i = state.frame;
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, maxR = Math.min(w, h) * 0.44;
+  const scale = maxR / R0;
+  const R = s.R[i], T = s.T[i];
+  const comp = Math.min(Math.max(s.R_min / Math.max(R, 1e-12), 0), 1);
+  const rpx = Math.max(R * scale, 2);
+
+  // initial-radius reference ring
+  ctx.strokeStyle = "rgba(120,140,170,0.18)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, R0 * scale, 0, 7); ctx.stroke();
+
+  // RT mix distortion: rough / over-driven capsules break up near stagnation
+  const rough = (1 - s.mix_penalty) * comp;
+  const lobes = 12, amp = rpx * 0.42 * rough;
+
+  // glowing hot core (radial gradient by temperature)
+  const glowR = Math.max(rpx * 1.5, rpx + T * 0.4);
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+  grd.addColorStop(0, tColor(T, 0.95));
+  grd.addColorStop(0.5, tColor(T * 0.5, 0.5));
+  grd.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx, cy, glowR, 0, 7); ctx.fill();
+
+  // the shell / fuel boundary (perturbed if mixing)
+  ctx.beginPath();
+  for (let k = 0; k <= 90; k++) {
+    const th = (k / 90) * Math.PI * 2;
+    const rr = rpx + amp * Math.sin(lobes * th + 0.6);
+    const px = cx + rr * Math.cos(th), py = cy + rr * Math.sin(th);
+    k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = tColor(T, 0.9); ctx.fill();
+  ctx.strokeStyle = tColor(Math.max(T, 1) * 1.4, 0.9); ctx.lineWidth = 1.5; ctx.stroke();
+
+  // phase caption
+  const tstag = s.t_stag, tt = s.t[i];
+  let phase = tt < tstag * 0.75 ? "coasting inward" : tt < tstag ? "converging" :
+    tt < tstag + s.tau_c ? (s.ignites ? "IGNITION" : "stagnation") : "disassembly";
+  ctx.fillStyle = "rgba(230,236,245,0.75)"; ctx.font = "13px -apple-system, sans-serif";
+  ctx.textAlign = "center"; ctx.fillText(phase, cx, h - 12);
+}
+
+// ---------- sparkline plots ----------
+function drawSpark(id, xs, ys, i, color, opts = {}) {
+  const cv = $(id); const { ctx, w, h } = fit(cv, 92);
+  ctx.clearRect(0, 0, w, h);
+  const pad = 6, log = opts.log;
+  const tf = (v) => (log ? Math.log10(Math.max(v, opts.floor || 1e-3)) : v);
+  let lo = Infinity, hi = -Infinity;
+  for (const v of ys) { const t = tf(v); if (t < lo) lo = t; if (t > hi) hi = t; }
+  if (hi - lo < 1e-9) hi = lo + 1;
+  const X = (k) => pad + (k / (xs.length - 1)) * (w - 2 * pad);
+  const Y = (v) => h - pad - ((tf(v) - lo) / (hi - lo)) * (h - 2 * pad);
+  // full curve (dim) + played portion (bright)
+  const path = (k0, k1, style, wdt) => {
+    ctx.beginPath();
+    for (let k = k0; k <= k1; k++) (k === k0 ? ctx.moveTo : ctx.lineTo).call(ctx, X(k), Y(ys[k]));
+    ctx.strokeStyle = style; ctx.lineWidth = wdt; ctx.stroke();
+  };
+  path(0, xs.length - 1, color.replace("1)", "0.28)"), 1.2);
+  path(0, i, color, 2);
+  // cursor dot
+  ctx.beginPath(); ctx.arc(X(i), Y(ys[i]), 3, 0, 7); ctx.fillStyle = color; ctx.fill();
+}
+
+// ---------- metrics + verdict ----------
+function drawMetrics() {
+  const s = state.sim, i = state.frame;
+  const vcol = { IGNITES: "var(--green)", MARGINAL: "var(--gold)", QUENCHED: "var(--accent)" }[s.verdict];
+  const vd = $("verdict"); vd.textContent = s.verdict; vd.style.color = vcol;
+  $("clock").textContent = (s.t[i] * 1e9).toFixed(2) + " ns";
+  $("m-gain").textContent = s.gain.toFixed(2);
+  $("m-yield").textContent = s.yield_MJ.toFixed(2) + " MJ";
+  $("m-T").textContent = s.T[i].toFixed(1) + " keV";
+  $("m-rhoR").textContent = s.rhoR[i].toFixed(2) + " g/cm²";
+  $("m-cr").textContent = (R0 / s.R_min).toFixed(0) + "×";
+  $("m-mix").textContent = (s.mix_penalty * 100).toFixed(0) + "%";
+  $("pv-R").textContent = (s.R[i] * 1e6).toFixed(0) + " µm";
+  $("pv-T").textContent = s.T[i].toFixed(1) + " keV";
+  $("pv-G").textContent = s.gain_t[i].toFixed(2);
+}
+
+function render() {
+  const s = state.sim, i = state.frame;
+  drawStage();
+  drawSpark("p-R", s.t, s.R.map((v) => v * 1e6), i, "rgba(74,163,255,1)");
+  drawSpark("p-T", s.t, s.T, i, "rgba(255,90,60,1)", { log: true, floor: 0.01 });
+  drawSpark("p-G", s.t, s.gain_t, i, "rgba(255,206,84,1)");
+  drawMetrics();
+  $("scrub").value = i;
+}
+
+// ---------- compute + loop ----------
+function recompute(resetFrame = true) {
+  state.sim = simulate(design());
+  if (resetFrame) state.frame = 0;
+  else state.frame = Math.min(state.frame, state.sim.t.length - 1);
+  render();
+}
+function tick(ts) {
+  if (!state.playing) return;
+  if (!state.last) state.last = ts;
+  const dt = (ts - state.last) / 1000; state.last = ts;
+  state.frame += state.speed * 90 * dt;               // ~90 frames/s at 1x
+  if (state.frame >= state.sim.t.length - 1) { state.frame = state.sim.t.length - 1; setPlaying(false); }
+  render();
+  if (state.playing) requestAnimationFrame(tick);
+}
+function setPlaying(p) {
+  state.playing = p; state.last = 0;
+  $("play").textContent = p ? "❚❚ Pause" : "▶ Play";
+  if (p) {
+    if (state.frame >= state.sim.t.length - 1) state.frame = 0;
+    requestAnimationFrame(tick);
+  }
+}
+
+// ---------- wire up ----------
+Object.values(S).forEach((el) => el.addEventListener("input", () => { syncLabels(); recompute(true); }));
+$("play").addEventListener("click", () => setPlaying(!state.playing));
+$("restart").addEventListener("click", () => { state.frame = 0; setPlaying(false); render(); });
+$("scrub").addEventListener("input", (e) => { setPlaying(false); state.frame = +e.target.value; render(); });
+$("speed").addEventListener("input", (e) => { state.speed = +e.target.value; $("speedval").textContent = (+e.target.value).toFixed(2).replace(/0$/, "") + "×"; });
+document.querySelectorAll("[data-preset]").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    const d = PRESETS[btn.dataset.preset];
+    S.E.value = d.E_MJ; S.fuel.value = d.fuel_ug; S.CR.value = d.CR; S.ad.value = d.adiabat; S.surf.value = d.surf_nm;
+    syncLabels(); recompute(true); setPlaying(true);
+  })
+);
+window.addEventListener("resize", () => render());
+
+syncLabels();
+recompute(true);
+</script>
+</body>
+</html>

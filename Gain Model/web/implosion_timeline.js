@@ -211,8 +211,14 @@ export function simulate(d, npts = 600) {
   const phiEnd = Math.max(phi[phi.length - 1], 1e-9);
   const ignites = amax(b.T) > 1.6 * T_stag;
 
+  // non-uniform grid: dense through stagnation + the (tens-of-ps) burn so the
+  // ignition spike is resolved; index-based playback then slows down there for free.
   const t_end = tr.t[tr.t.length - 1] + b.tau_c;
-  const t = linspace(0, t_end, npts);
+  const n1 = Math.floor(npts * 0.47), n2 = Math.floor(npts * 0.36), n3 = npts - n1 - n2;
+  const pre = Array.from({ length: n1 }, (_, i) => (t_stag * i) / n1); // 0 .. <t_stag
+  const mid = linspace(t_stag, t_stag + b.tau_c, n2);
+  const post = linspace(t_stag + b.tau_c, t_end, n3 + 1).slice(1);
+  const t = pre.concat(mid, post);
   const R = t.map((tt) => interp(tt, tr.t, tr.R));
   const comp = R.map((r) => Math.min(Math.max(R_min / Math.max(r, 1e-12), 0), 1));
   const T = comp.map((c) => T_stag * c * c);
